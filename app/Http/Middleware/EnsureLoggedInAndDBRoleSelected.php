@@ -43,6 +43,7 @@ class EnsureLoggedInAndDBRoleSelected
             if ($response->successful()) {
                 if ($response['authenticated']) {
                     $user = $response['user'];
+                    $request->attributes->set('ims_user', $user);
                     if($exprected_role_name) {
                         $current_role_id = $user['current_db_role_id'] ?? null;
                         if($current_role_id) {

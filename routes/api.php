@@ -10,6 +10,7 @@ use App\Http\Controllers\PersonnelController;
 use App\Http\Controllers\PublicationController;
 use App\Http\Controllers\ResearchController;
 use App\Http\Controllers\SnippetController;
+use App\Http\Controllers\GalleryController;
 
 use App\Http\Controllers\Editor\PageController as EditorPageController;
 use App\Http\Controllers\Editor\PostController as EditorPostController;
@@ -17,6 +18,9 @@ use App\Http\Controllers\Editor\PostCategoryController;
 use App\Http\Controllers\Editor\PostTaggedEntityController;
 use App\Http\Controllers\Editor\MenuController as EditorMenuController;
 use App\Http\Controllers\Editor\SnippetController as EditorSnippetController;
+use App\Http\Controllers\Editor\MediaFolderController as EditorMediaFolderController;
+use App\Http\Controllers\Editor\MediaItemController as EditorMediaItemController;
+use App\Http\Controllers\Editor\GalleryController as EditorGalleryController;
 use App\Http\Controllers\Entity\ProfileController as EntityProfileController;
 use App\Http\Controllers\Entity\SettingController as EntitySettingController;
 
@@ -53,6 +57,10 @@ Route::middleware([])->group(function () {
 
     // 🔹 Snippets
     Route::get('snippets', [SnippetController::class, 'index']);       // Input: ?entity_id or ?slug    
+
+    // 🔹 Galleries
+    Route::get('galleries', [GalleryController::class, 'index']);      // Input: ?entity_id, optional filters
+    Route::get('gallery', [GalleryController::class, 'show']);         // Input: ?id OR ?entity_id + ?slug
 
     // 🔹 Post Categories (Public read access)
     Route::get('post-categories', [PostCategoryController::class, 'index']);
@@ -112,6 +120,32 @@ Route::middleware(['ims.logged_in_and_role_selected:web_curator'])->group(functi
     // Media uploads
     Route::post('media/upload', [\App\Http\Controllers\Api\MediaController::class, 'uploadImage']);
     Route::delete('media/delete', [\App\Http\Controllers\Api\MediaController::class, 'deleteImage']);
+
+    // Media library
+    Route::get('editor/media/folders', [EditorMediaFolderController::class, 'index']);
+    Route::post('editor/media/folders', [EditorMediaFolderController::class, 'store']);
+    Route::get('editor/media/folders/{id}', [EditorMediaFolderController::class, 'show']);
+    Route::put('editor/media/folders/{id}', [EditorMediaFolderController::class, 'update']);
+    Route::delete('editor/media/folders/{id}', [EditorMediaFolderController::class, 'destroy']);
+    Route::post('editor/media/folders/reorder', [EditorMediaFolderController::class, 'reorder']);
+
+    Route::get('editor/media/items', [EditorMediaItemController::class, 'index']);
+    Route::post('editor/media/items/upload', [EditorMediaItemController::class, 'upload']);
+    Route::get('editor/media/items/{id}', [EditorMediaItemController::class, 'show']);
+    Route::put('editor/media/items/{id}', [EditorMediaItemController::class, 'update']);
+    Route::post('editor/media/items/{id}/move', [EditorMediaItemController::class, 'move']);
+    Route::delete('editor/media/items/{id}', [EditorMediaItemController::class, 'destroy']);
+
+    // Galleries
+    Route::get('editor/galleries', [EditorGalleryController::class, 'index']);
+    Route::post('editor/galleries', [EditorGalleryController::class, 'store']);
+    Route::get('editor/galleries/{id}', [EditorGalleryController::class, 'show']);
+    Route::put('editor/galleries/{id}', [EditorGalleryController::class, 'update']);
+    Route::delete('editor/galleries/{id}', [EditorGalleryController::class, 'destroy']);
+    Route::post('editor/galleries/{galleryId}/items', [EditorGalleryController::class, 'addItems']);
+    Route::put('editor/galleries/{galleryId}/items/reorder', [EditorGalleryController::class, 'reorderItems']);
+    Route::put('editor/galleries/{galleryId}/items/{itemId}', [EditorGalleryController::class, 'updateItem']);
+    Route::delete('editor/galleries/{galleryId}/items/{itemId}', [EditorGalleryController::class, 'removeItem']);
 
     // Entity Profile
     Route::get('entity/profile', [EntityProfileController::class, 'show']);

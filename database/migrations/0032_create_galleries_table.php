@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('owner_entity_id')->comment('Entity that owns this gallery.');
             $table->string('title', 255);
-            $table->string('slug', 255);
+            $table->string('slug', 180);
             $table->string('excerpt', 500)->nullable();
             $table->longText('description')->nullable();
             $table->unsignedBigInteger('cover_media_item_id')->nullable();

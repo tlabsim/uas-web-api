@@ -28,6 +28,10 @@ This document catalogs the current database schema for the **NSTU Web API** proj
   - [`postmeta`](#postmeta)
   - [`post_attachments`](#post_attachments)
   - [`post_tagged_entities`](#post_tagged_entities)
+  - [`media_folders`](#media_folders)
+  - [`media_items`](#media_items)
+  - [`galleries`](#galleries)
+  - [`gallery_items`](#gallery_items)
 - [Publications & Research](#publications--research)
   - [`publications`](#publications)
   - [`publication_authors`](#publication_authors)
@@ -161,6 +165,42 @@ This document catalogs the current database schema for the **NSTU Web API** proj
   - `post_id` FK to `posts`.
   - `entity_id` FK to `entity_profiles`.
   - Status workflow (`Pending Approval`, `Approved`, `Withdrawn`) and approver tracking.
+
+### `media_folders`
+- **Purpose:** Curator-facing folder hierarchy for organizing uploaded media within an entity.
+- **Key Columns:**
+  - `owner_entity_id` FK to `entity_profiles`.
+  - `parent_id` self-reference enabling nested folders.
+  - `folder_name`, `slug`, `description`, `sort_order`.
+- **Usage Notes:** Folder structure is for internal organization only and is not intended to define public URLs.
+
+### `media_items`
+- **Purpose:** Reusable uploaded media assets owned by an entity.
+- **Key Columns:**
+  - `owner_entity_id` FK to `entity_profiles`.
+  - `folder_id` FK to `media_folders` for optional organization.
+  - `storage_disk`, `storage_path`, `public_url`, `storage_context`.
+  - File metadata such as `media_type`, `mime_type`, `file_size`, `width`, `height`.
+  - Presentation metadata such as `title`, `alt_text`, `caption`, and `description`.
+- **Usage Notes:** Media items are reusable across multiple galleries and future content types.
+
+### `galleries`
+- **Purpose:** Public-facing media collections for entity websites.
+- **Key Columns:**
+  - `owner_entity_id` FK to `entity_profiles`.
+  - `title`, `slug`, `excerpt`, `description`.
+  - `cover_media_item_id` FK to `media_items`.
+  - `gallery_status`, `is_featured`, `published_at`, `content_last_edited_at`.
+- **Usage Notes:** Only `Published` galleries with a valid `published_at` should be surfaced to public websites.
+
+### `gallery_items`
+- **Purpose:** Ordered items belonging to a gallery.
+- **Key Columns:**
+  - `gallery_id` FK to `galleries`.
+  - `media_item_id` FK to `media_items`.
+  - Optional `caption_override` and `alt_override`.
+  - `sort_order` for frontend display ordering.
+- **Usage Notes:** A media item can be reused across multiple galleries, while each gallery item can override caption/alt text for that specific gallery context.
 
 ---
 

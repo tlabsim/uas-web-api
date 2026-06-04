@@ -1,61 +1,84 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# NSTU Web API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+`nstu-web-api` is the content and presentation API for NSTU's public websites. It sits between:
 
-## About Laravel
+- `nstu-dashboards`, where Web Curators manage entity-owned content
+- `nstu-web`, the main university website
+- `nstu-entities-web`, the websites for faculties, departments, institutes, and other entities
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+The API consumes authoritative identity and structural data from IMS, then stores website-specific content such as static pages, posts, snippets, media assets, and galleries.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Web Curator Scope
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Web Curator write routes are protected by:
 
-## Learning Laravel
+- `ims.logged_in_and_role_selected:web_curator`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+That middleware resolves the currently selected IMS DB role and injects:
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- `current_role_scope`
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+The scope is treated as the owning entity ID for editor operations.
 
-## Laravel Sponsors
+## Gallery And Media Backend
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+The media gallery backend is DB-backed and entity-scoped. It separates:
 
-### Premium Partners
+- `media_folders`: curator-facing folder organization
+- `media_items`: uploaded reusable media assets
+- `galleries`: public-facing published collections
+- `gallery_items`: ordered membership of assets inside galleries
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Folders are for internal organization. Galleries are for public presentation.
 
-## Contributing
+## Public Gallery Endpoints
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- `GET /api/galleries?entity_id={id}`
+- `GET /api/galleries?entity_id={id}&is_featured=1`
+- `GET /api/galleries?entity_id={id}&include_items=1`
+- `GET /api/gallery?id={galleryId}`
+- `GET /api/gallery?entity_id={id}&slug={gallerySlug}`
 
-## Code of Conduct
+Only published galleries are returned publicly.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Editor Media And Gallery Endpoints
 
-## Security Vulnerabilities
+Protected Web Curator endpoints:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- `GET /api/editor/media/folders`
+- `POST /api/editor/media/folders`
+- `GET /api/editor/media/folders/{id}`
+- `PUT /api/editor/media/folders/{id}`
+- `DELETE /api/editor/media/folders/{id}`
+- `GET /api/editor/media/items`
+- `POST /api/editor/media/items/upload`
+- `GET /api/editor/media/items/{id}`
+- `PUT /api/editor/media/items/{id}`
+- `POST /api/editor/media/items/{id}/move`
+- `DELETE /api/editor/media/items/{id}`
+- `GET /api/editor/galleries`
+- `POST /api/editor/galleries`
+- `GET /api/editor/galleries/{id}`
+- `PUT /api/editor/galleries/{id}`
+- `DELETE /api/editor/galleries/{id}`
+- `POST /api/editor/galleries/{galleryId}/items`
+- `PUT /api/editor/galleries/{galleryId}/items/reorder`
+- `PUT /api/editor/galleries/{galleryId}/items/{itemId}`
+- `DELETE /api/editor/galleries/{galleryId}/items/{itemId}`
 
-## License
+## Legacy Upload Compatibility
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The existing Web Curator upload endpoints remain available:
+
+- `POST /api/media/upload`
+- `DELETE /api/media/delete`
+
+They now create and remove `media_items` behind the scenes while preserving the existing response shape used by current dashboard code.
+
+## Schema Notes
+
+See:
+
+- [database/schema_overview.md](database/schema_overview.md)
+
+for the high-level table inventory, including the media and gallery tables.

@@ -82,6 +82,20 @@ class MediaLibraryService
         return MediaFolder::where('owner_entity_id', $entityId)->find($folderId);
     }
 
+    public function deleteFolderContents(MediaFolder $folder): void
+    {
+        $folder->loadMissing(['children', 'mediaItems']);
+
+        foreach ($folder->children as $childFolder) {
+            $this->deleteFolderContents($childFolder);
+            $childFolder->delete();
+        }
+
+        foreach ($folder->mediaItems as $mediaItem) {
+            $this->delete($mediaItem);
+        }
+    }
+
     public function buildFolderTree(int $entityId)
     {
         $folders = MediaFolder::where('owner_entity_id', $entityId)
@@ -108,10 +122,12 @@ class MediaLibraryService
     public function generateUniqueFolderSlug(int $entityId, string $folderName, ?int $parentId = null, ?int $ignoreId = null): string
     {
         $base = Str::slug($folderName) ?: 'folder';
+        $this->releaseDeletedFolderSlugConflicts($entityId, $base, $parentId, $ignoreId);
         $slug = $base;
         $counter = 2;
 
         while ($this->folderSlugExists($entityId, $slug, $parentId, $ignoreId)) {
+            $this->releaseDeletedFolderSlugConflicts($entityId, $slug, $parentId, $ignoreId);
             $slug = $base . '-' . $counter;
             $counter++;
         }
@@ -122,10 +138,12 @@ class MediaLibraryService
     public function generateUniqueGallerySlug(int $entityId, string $title, ?int $ignoreId = null): string
     {
         $base = Str::slug($title) ?: 'gallery';
+        $this->releaseDeletedGallerySlugConflicts($entityId, $base, $ignoreId);
         $slug = $base;
         $counter = 2;
 
         while ($this->gallerySlugExists($entityId, $slug, $ignoreId)) {
+            $this->releaseDeletedGallerySlugConflicts($entityId, $slug, $ignoreId);
             $slug = $base . '-' . $counter;
             $counter++;
         }
@@ -211,6 +229,61 @@ class MediaLibraryService
             ->where('slug', $slug)
             ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
             ->exists();
+    }
+
+    private function releaseDeletedFolderSlugConflicts(int $entityId, string $slug, ?int $parentId = null, ?int $ignoreId = null): void
+    {
+        MediaFolder::withTrashed()
+            ->onlyTrashed()
+            ->where('owner_entity_id', $entityId)
+            ->where('parent_id', $parentId)
+            ->where('slug', $slug)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->get()
+            ->each(fn (MediaFolder $folder) => $this->archiveFolderSlug($folder));
+    }
+
+    private function releaseDeletedGallerySlugConflicts(int $entityId, string $slug, ?int $ignoreId = null): void
+    {
+        \App\Models\Gallery::withTrashed()
+            ->onlyTrashed()
+            ->where('owner_entity_id', $entityId)
+            ->where('slug', $slug)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->get()
+            ->each(fn (\App\Models\Gallery $gallery) => $this->archiveGallerySlug($gallery));
+    }
+
+    private function archiveFolderSlug(MediaFolder $folder): void
+    {
+        $suffix = '--deleted-' . $folder->id;
+        $maxLength = max(1, 180 - strlen($suffix));
+        $baseSlug = mb_substr($folder->slug ?: 'folder', 0, $maxLength);
+        $archivedSlug = $baseSlug . $suffix;
+
+        if ($folder->slug === $archivedSlug) {
+            return;
+        }
+
+        MediaFolder::withTrashed()
+            ->whereKey($folder->id)
+            ->update(['slug' => $archivedSlug]);
+    }
+
+    private function archiveGallerySlug(\App\Models\Gallery $gallery): void
+    {
+        $suffix = '--deleted-' . $gallery->id;
+        $maxLength = max(1, 180 - strlen($suffix));
+        $baseSlug = mb_substr($gallery->slug ?: 'gallery', 0, $maxLength);
+        $archivedSlug = $baseSlug . $suffix;
+
+        if ($gallery->slug === $archivedSlug) {
+            return;
+        }
+
+        \App\Models\Gallery::withTrashed()
+            ->whereKey($gallery->id)
+            ->update(['slug' => $archivedSlug]);
     }
 
     private function sanitizeStorageContext(string $context): string
