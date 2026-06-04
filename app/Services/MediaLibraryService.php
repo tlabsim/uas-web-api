@@ -52,8 +52,9 @@ class MediaLibraryService
         );
         $actor = $this->resolveActor($request);
 
-        return MediaItem::create([
+        $mediaItem = MediaItem::create([
             'owner_entity_id' => $entityId,
+            'public_key' => $this->generateUniquePublicKey(),
             'folder_id' => $folder?->id,
             'storage_disk' => $disk,
             'storage_path' => $storagePath,
@@ -77,6 +78,8 @@ class MediaLibraryService
             'uploaded_by_ims_user_id' => $actor['id'],
             'uploaded_by_name' => $actor['name'],
         ]);
+
+        return $mediaItem;
     }
 
     public function delete(MediaItem $mediaItem): void
@@ -563,5 +566,14 @@ class MediaLibraryService
         }
 
         return is_string($resolved) ? $resolved : null;
+    }
+
+    private function generateUniquePublicKey(): string
+    {
+        do {
+            $candidate = strtolower(Str::random(24));
+        } while (MediaItem::withTrashed()->where('public_key', $candidate)->exists());
+
+        return $candidate;
     }
 }

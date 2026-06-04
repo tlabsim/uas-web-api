@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class MediaItem extends Model
 {
@@ -14,6 +15,7 @@ class MediaItem extends Model
 
     protected $fillable = [
         'owner_entity_id',
+        'public_key',
         'folder_id',
         'storage_disk',
         'storage_path',
@@ -71,6 +73,34 @@ class MediaItem extends Model
 
     public function getFullUrlAttribute(): string
     {
+        if ($this->usesProxyUrls()) {
+            return route('media.public.show', [
+                'publicKey' => $this->ensurePublicKey(),
+                'filename' => $this->publicFileName(),
+            ]);
+        }
+
+        return $this->directFullUrl();
+    }
+
+    public function getThumbnailFullUrlAttribute(): ?string
+    {
+        if (!$this->thumbnail_path && !$this->thumbnail_url) {
+            return null;
+        }
+
+        if ($this->usesProxyUrls()) {
+            return route('media.public.thumbnail', [
+                'publicKey' => $this->ensurePublicKey(),
+                'filename' => $this->publicThumbnailFileName(),
+            ]);
+        }
+
+        return $this->directThumbnailUrl();
+    }
+
+    public function directFullUrl(): string
+    {
         if ($this->public_url && filter_var($this->public_url, FILTER_VALIDATE_URL)) {
             return $this->public_url;
         }
@@ -80,7 +110,7 @@ class MediaItem extends Model
             : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->storage_path);
     }
 
-    public function getThumbnailFullUrlAttribute(): ?string
+    public function directThumbnailUrl(): ?string
     {
         if (!$this->thumbnail_path && !$this->thumbnail_url) {
             return null;
@@ -93,5 +123,58 @@ class MediaItem extends Model
         return $this->thumbnail_url
             ? rtrim(config('app.url'), '/') . '/' . ltrim($this->thumbnail_url, '/')
             : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->thumbnail_path);
+    }
+
+    public function publicFileName(): string
+    {
+        return $this->buildPublicFileName($this->original_name ?: $this->file_name ?: 'media');
+    }
+
+    public function publicThumbnailFileName(): string
+    {
+        return $this->buildPublicFileName($this->file_name ?: $this->original_name ?: 'thumbnail');
+    }
+
+    public function thumbnailMimeType(): ?string
+    {
+        if ($this->thumbnail_path) {
+            $extension = strtolower(pathinfo($this->thumbnail_path, PATHINFO_EXTENSION));
+            return match ($extension) {
+                'webp' => 'image/webp',
+                'png' => 'image/png',
+                default => 'image/jpeg',
+            };
+        }
+
+        return $this->mime_type;
+    }
+
+    public function ensurePublicKey(): string
+    {
+        if ($this->public_key) {
+            return $this->public_key;
+        }
+
+        do {
+            $candidate = strtolower(Str::random(24));
+        } while (static::withTrashed()->where('public_key', $candidate)->exists());
+
+        $this->forceFill(['public_key' => $candidate])->saveQuietly();
+
+        return (string) $this->public_key;
+    }
+
+    private function usesProxyUrls(): bool
+    {
+        return config('media.public_url_mode', 'direct') === 'proxy';
+    }
+
+    private function buildPublicFileName(string $source): string
+    {
+        $extension = strtolower(pathinfo($source, PATHINFO_EXTENSION));
+        $name = pathinfo($source, PATHINFO_FILENAME);
+        $slug = Str::slug($name) ?: 'media-file';
+
+        return $extension ? "{$slug}.{$extension}" : $slug;
     }
 }
