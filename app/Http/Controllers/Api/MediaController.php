@@ -74,6 +74,8 @@ class MediaController extends Controller
                     'path' => $mediaItem->storage_path,
                     'url' => $mediaItem->public_url,
                     'full_url' => $mediaItem->full_url,
+                    'thumbnail_url' => $mediaItem->thumbnail_url,
+                    'thumbnail_full_url' => $mediaItem->thumbnail_full_url,
                     'size' => $mediaItem->file_size,
                     'mime_type' => $mediaItem->mime_type,
                     'media_item' => $mediaItem->load('folder'),

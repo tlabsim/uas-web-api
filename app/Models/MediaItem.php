@@ -21,11 +21,15 @@ class MediaItem extends Model
         'file_name',
         'original_name',
         'public_url',
+        'thumbnail_path',
+        'thumbnail_url',
         'media_type',
         'mime_type',
         'file_size',
         'width',
         'height',
+        'thumbnail_width',
+        'thumbnail_height',
         'title',
         'alt_text',
         'caption',
@@ -40,11 +44,14 @@ class MediaItem extends Model
         'file_size' => 'integer',
         'width' => 'integer',
         'height' => 'integer',
+        'thumbnail_width' => 'integer',
+        'thumbnail_height' => 'integer',
         'uploaded_by_ims_user_id' => 'integer',
     ];
 
     protected $appends = [
         'full_url',
+        'thumbnail_full_url',
     ];
 
     public function entity(): BelongsTo
@@ -71,5 +78,20 @@ class MediaItem extends Model
         return $this->public_url
             ? rtrim(config('app.url'), '/') . '/' . ltrim($this->public_url, '/')
             : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->storage_path);
+    }
+
+    public function getThumbnailFullUrlAttribute(): ?string
+    {
+        if (!$this->thumbnail_path && !$this->thumbnail_url) {
+            return null;
+        }
+
+        if ($this->thumbnail_url && filter_var($this->thumbnail_url, FILTER_VALIDATE_URL)) {
+            return $this->thumbnail_url;
+        }
+
+        return $this->thumbnail_url
+            ? rtrim(config('app.url'), '/') . '/' . ltrim($this->thumbnail_url, '/')
+            : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->thumbnail_path);
     }
 }

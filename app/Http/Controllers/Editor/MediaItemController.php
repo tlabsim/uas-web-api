@@ -61,15 +61,26 @@ class MediaItemController extends Controller
         $query->orderByDesc('created_at');
 
         if ($request->boolean('fetch_all')) {
+            $items = $query->get()->map(function (MediaItem $mediaItem) {
+                return $this->mediaLibraryService->ensureThumbnail($mediaItem);
+            })->values();
+
             return response()->json([
                 'status' => 'success',
-                'data' => $query->get(),
+                'data' => $items,
             ]);
         }
 
+        $paginator = $query->paginate($request->input('per_page', 24));
+        $paginator->setCollection(
+            $paginator->getCollection()->map(function (MediaItem $mediaItem) {
+                return $this->mediaLibraryService->ensureThumbnail($mediaItem);
+            })->values()
+        );
+
         return response()->json([
             'status' => 'success',
-            'data' => $query->paginate($request->input('per_page', 24)),
+            'data' => $paginator,
         ]);
     }
 

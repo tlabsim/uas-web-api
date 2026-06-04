@@ -11,6 +11,9 @@ use Illuminate\Support\Str;
 
 class MediaLibraryService
 {
+    private const THUMBNAIL_MAX_DIMENSION = 480;
+    private const THUMBNAIL_JPEG_QUALITY = 82;
+
     public function upload(
         UploadedFile $file,
         int $entityId,
@@ -39,6 +42,14 @@ class MediaLibraryService
         [$width, $height] = $this->extractDimensions($file);
         $mimeType = $file->getMimeType();
         $publicUrl = Storage::disk($disk)->url($storagePath);
+        $thumbnail = $this->generateThumbnailFromUploadedFile(
+            $file,
+            $disk,
+            $entityId,
+            $storageContext,
+            $storedName,
+            $mimeType
+        );
         $actor = $this->resolveActor($request);
 
         return MediaItem::create([
@@ -50,11 +61,15 @@ class MediaLibraryService
             'file_name' => basename($storagePath),
             'original_name' => $originalName,
             'public_url' => $publicUrl,
+            'thumbnail_path' => $thumbnail['path'] ?? null,
+            'thumbnail_url' => $thumbnail['url'] ?? null,
             'media_type' => $this->determineMediaType($mimeType),
             'mime_type' => $mimeType,
             'file_size' => $file->getSize(),
             'width' => $width,
             'height' => $height,
+            'thumbnail_width' => $thumbnail['width'] ?? null,
+            'thumbnail_height' => $thumbnail['height'] ?? null,
             'title' => $options['title'] ?? $baseName,
             'alt_text' => $options['alt_text'] ?? null,
             'caption' => $options['caption'] ?? null,
@@ -70,7 +85,56 @@ class MediaLibraryService
             Storage::disk($mediaItem->storage_disk)->delete($mediaItem->storage_path);
         }
 
+        if ($mediaItem->thumbnail_path && Storage::disk($mediaItem->storage_disk)->exists($mediaItem->thumbnail_path)) {
+            Storage::disk($mediaItem->storage_disk)->delete($mediaItem->thumbnail_path);
+        }
+
         $mediaItem->delete();
+    }
+
+    public function ensureThumbnail(MediaItem $mediaItem): MediaItem
+    {
+        if (
+            $mediaItem->media_type !== 'image'
+            || $mediaItem->thumbnail_path
+            || !extension_loaded('gd')
+            || !$mediaItem->storage_path
+        ) {
+            return $mediaItem;
+        }
+
+        $disk = $mediaItem->storage_disk ?: 'public';
+
+        if (!Storage::disk($disk)->exists($mediaItem->storage_path)) {
+            return $mediaItem;
+        }
+
+        $sourcePath = $this->safeDiskPath($disk, $mediaItem->storage_path);
+        if (!$sourcePath) {
+            return $mediaItem;
+        }
+
+        $thumbnail = $this->generateThumbnailFromSourcePath(
+            $sourcePath,
+            $disk,
+            (int) $mediaItem->owner_entity_id,
+            $mediaItem->storage_context ?: 'uploads',
+            $mediaItem->file_name ?: basename($mediaItem->storage_path),
+            $mediaItem->mime_type
+        );
+
+        if (!$thumbnail) {
+            return $mediaItem;
+        }
+
+        $mediaItem->forceFill([
+            'thumbnail_path' => $thumbnail['path'],
+            'thumbnail_url' => $thumbnail['url'],
+            'thumbnail_width' => $thumbnail['width'],
+            'thumbnail_height' => $thumbnail['height'],
+        ])->save();
+
+        return $mediaItem->refresh();
     }
 
     public function resolveFolderForEntity(int $entityId, ?int $folderId = null): ?MediaFolder
@@ -300,5 +364,204 @@ class MediaLibraryService
     private function buildStoragePath(int $entityId, string $context, string $fileName): string
     {
         return "media/entity-{$entityId}/{$context}/" . now()->format('Y/m') . "/{$fileName}";
+    }
+
+    private function buildThumbnailPath(int $entityId, string $context, string $storedName, string $extension): string
+    {
+        $baseName = pathinfo($storedName, PATHINFO_FILENAME);
+        $sanitizedBase = Str::slug($baseName) ?: 'media';
+
+        return "media/entity-{$entityId}/{$context}/" . now()->format('Y/m') . "/thumbnails/{$sanitizedBase}_thumb.{$extension}";
+    }
+
+    private function generateThumbnailFromUploadedFile(
+        UploadedFile $file,
+        string $disk,
+        int $entityId,
+        string $storageContext,
+        string $storedName,
+        ?string $mimeType
+    ): ?array {
+        return $this->generateThumbnailFromSourcePath(
+            $file->getPathname(),
+            $disk,
+            $entityId,
+            $storageContext,
+            $storedName,
+            $mimeType
+        );
+    }
+
+    private function generateThumbnailFromSourcePath(
+        string $sourcePath,
+        string $disk,
+        int $entityId,
+        string $storageContext,
+        string $storedName,
+        ?string $mimeType
+    ): ?array {
+        if (!$this->canGenerateThumbnail($sourcePath, $mimeType)) {
+            return null;
+        }
+
+        $rendered = $this->renderThumbnailBinary($sourcePath, (string) $mimeType);
+        if (!$rendered) {
+            return null;
+        }
+
+        $thumbnailPath = $this->buildThumbnailPath(
+            $entityId,
+            $storageContext,
+            $storedName,
+            $rendered['extension']
+        );
+
+        Storage::disk($disk)->put($thumbnailPath, $rendered['binary']);
+
+        return [
+            'path' => $thumbnailPath,
+            'url' => Storage::disk($disk)->url($thumbnailPath),
+            'width' => $rendered['width'],
+            'height' => $rendered['height'],
+        ];
+    }
+
+    private function canGenerateThumbnail(string $sourcePath, ?string $mimeType): bool
+    {
+        if (!extension_loaded('gd') || !$mimeType || !str_starts_with($mimeType, 'image/')) {
+            return false;
+        }
+
+        if (in_array($mimeType, ['image/svg+xml', 'image/svg'], true)) {
+            return false;
+        }
+
+        return is_file($sourcePath) && is_readable($sourcePath);
+    }
+
+    private function renderThumbnailBinary(string $sourcePath, string $mimeType): ?array
+    {
+        [$sourceWidth, $sourceHeight] = array_values($this->extractImageSizeFromPath($sourcePath));
+        if (!$sourceWidth || !$sourceHeight) {
+            return null;
+        }
+
+        $sourceImage = $this->createImageResource($sourcePath, $mimeType);
+        if (!$sourceImage) {
+            return null;
+        }
+
+        $scale = min(1, self::THUMBNAIL_MAX_DIMENSION / max($sourceWidth, $sourceHeight));
+        $targetWidth = max(1, (int) round($sourceWidth * $scale));
+        $targetHeight = max(1, (int) round($sourceHeight * $scale));
+
+        $thumbnailImage = imagecreatetruecolor($targetWidth, $targetHeight);
+        if (!$thumbnailImage) {
+            imagedestroy($sourceImage);
+            return null;
+        }
+
+        $outputFormat = $this->determineThumbnailOutputFormat($mimeType);
+        $this->prepareThumbnailCanvas($thumbnailImage, $outputFormat);
+
+        imagecopyresampled(
+            $thumbnailImage,
+            $sourceImage,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $sourceWidth,
+            $sourceHeight
+        );
+
+        ob_start();
+
+        try {
+            $written = match ($outputFormat) {
+                'webp' => imagewebp($thumbnailImage, null, self::THUMBNAIL_JPEG_QUALITY),
+                'png' => imagepng($thumbnailImage),
+                default => imagejpeg($thumbnailImage, null, self::THUMBNAIL_JPEG_QUALITY),
+            };
+
+            $binary = $written ? (string) ob_get_clean() : '';
+        } catch (\Throwable $e) {
+            ob_end_clean();
+            $binary = '';
+        } finally {
+            imagedestroy($sourceImage);
+            imagedestroy($thumbnailImage);
+        }
+
+        if ($binary === '') {
+            return null;
+        }
+
+        return [
+            'binary' => $binary,
+            'extension' => $outputFormat,
+            'width' => $targetWidth,
+            'height' => $targetHeight,
+        ];
+    }
+
+    private function determineThumbnailOutputFormat(string $mimeType): string
+    {
+        if (function_exists('imagewebp')) {
+            return 'webp';
+        }
+
+        return in_array($mimeType, ['image/png', 'image/gif', 'image/webp'], true)
+            ? 'png'
+            : 'jpg';
+    }
+
+    private function prepareThumbnailCanvas($image, string $outputFormat): void
+    {
+        if (in_array($outputFormat, ['png', 'webp'], true)) {
+            imagealphablending($image, false);
+            imagesavealpha($image, true);
+            $transparent = imagecolorallocatealpha($image, 0, 0, 0, 127);
+            imagefill($image, 0, 0, $transparent);
+            return;
+        }
+
+        $background = imagecolorallocate($image, 255, 255, 255);
+        imagefill($image, 0, 0, $background);
+    }
+
+    private function createImageResource(string $sourcePath, string $mimeType): \GdImage|false
+    {
+        return match ($mimeType) {
+            'image/jpeg', 'image/jpg' => @imagecreatefromjpeg($sourcePath),
+            'image/png' => @imagecreatefrompng($sourcePath),
+            'image/gif' => @imagecreatefromgif($sourcePath),
+            'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($sourcePath) : false,
+            'image/bmp', 'image/x-ms-bmp' => function_exists('imagecreatefrombmp') ? @imagecreatefrombmp($sourcePath) : false,
+            default => false,
+        };
+    }
+
+    private function extractImageSizeFromPath(string $sourcePath): array
+    {
+        $size = @getimagesize($sourcePath);
+
+        return [
+            $size[0] ?? null,
+            $size[1] ?? null,
+        ];
+    }
+
+    private function safeDiskPath(string $disk, string $path): ?string
+    {
+        try {
+            $resolved = Storage::disk($disk)->path($path);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return is_string($resolved) ? $resolved : null;
     }
 }
