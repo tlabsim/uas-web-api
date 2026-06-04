@@ -21,7 +21,7 @@ return [
     | "redirect" resolves the opaque key, then redirects to the direct file URL.
     |
     */
-    'proxy_delivery_mode' => env('MEDIA_PROXY_DELIVERY_MODE', 'stream'),
+    'proxy_delivery_mode' => env('MEDIA_PROXY_DELIVERY_MODE', 'redirect'),
 
     /*
     |--------------------------------------------------------------------------
