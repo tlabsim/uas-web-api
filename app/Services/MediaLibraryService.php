@@ -23,16 +23,14 @@ class MediaLibraryService
         $disk = $options['disk'] ?? 'public';
         $folder = $options['folder'] ?? null;
         $storageContext = $this->sanitizeStorageContext($options['storage_context'] ?? 'uploads');
-        $originalName = $file->getClientOriginalName();
-        $extension = $file->getClientOriginalExtension();
+        $originalName = $this->sanitizeOriginalFileName($file->getClientOriginalName());
         $baseName = pathinfo($originalName, PATHINFO_FILENAME);
-        $storedName = Str::slug($baseName) . '_' . Str::lower(Str::random(12));
-
-        if ($extension) {
-            $storedName .= '.' . Str::lower($extension);
-        }
-
-        $storagePath = $this->buildStoragePath($entityId, $storageContext, $storedName);
+        $storageBucket = $this->generateOpaqueBucket(
+            sprintf('media|entity:%s|context:%s|period:%s', $entityId, $storageContext, now()->format('Y/m'))
+        );
+        $storageSuffixKey = $this->generateUniqueStorageSuffixKey(MediaItem::class);
+        $storedName = $this->buildStorageFileName($originalName, $storageSuffixKey);
+        $storagePath = $this->buildStoragePath($storageBucket, $storedName);
         Storage::disk($disk)->putFileAs(
             dirname($storagePath),
             $file,
@@ -45,9 +43,7 @@ class MediaLibraryService
         $thumbnail = $this->generateThumbnailFromUploadedFile(
             $file,
             $disk,
-            $entityId,
-            $storageContext,
-            $storedName,
+            $storagePath,
             $mimeType
         );
         $actor = $this->resolveActor($request);
@@ -57,6 +53,8 @@ class MediaLibraryService
             'public_key' => $this->generateUniquePublicKey(),
             'folder_id' => $folder?->id,
             'storage_disk' => $disk,
+            'storage_bucket' => $storageBucket,
+            'storage_suffix_key' => $storageSuffixKey,
             'storage_path' => $storagePath,
             'storage_context' => $storageContext,
             'file_name' => basename($storagePath),
@@ -120,9 +118,7 @@ class MediaLibraryService
         $thumbnail = $this->generateThumbnailFromSourcePath(
             $sourcePath,
             $disk,
-            (int) $mediaItem->owner_entity_id,
-            $mediaItem->storage_context ?: 'uploads',
-            $mediaItem->file_name ?: basename($mediaItem->storage_path),
+            $mediaItem->storage_path,
             $mediaItem->mime_type
         );
 
@@ -364,33 +360,29 @@ class MediaLibraryService
         return $segments->isNotEmpty() ? $segments->implode('/') : 'uploads';
     }
 
-    private function buildStoragePath(int $entityId, string $context, string $fileName): string
+    private function buildStoragePath(string $bucket, string $fileName): string
     {
-        return "media/entity-{$entityId}/{$context}/" . now()->format('Y/m') . "/{$fileName}";
+        return "media/{$bucket}/{$fileName}";
     }
 
-    private function buildThumbnailPath(int $entityId, string $context, string $storedName, string $extension): string
+    private function buildThumbnailPath(string $storagePath, string $extension): string
     {
-        $baseName = pathinfo($storedName, PATHINFO_FILENAME);
+        $baseName = pathinfo($storagePath, PATHINFO_FILENAME);
         $sanitizedBase = Str::slug($baseName) ?: 'media';
 
-        return "media/entity-{$entityId}/{$context}/" . now()->format('Y/m') . "/thumbnails/{$sanitizedBase}_thumb.{$extension}";
+        return dirname($storagePath) . "/thumbnails/{$sanitizedBase}_thumb.{$extension}";
     }
 
     private function generateThumbnailFromUploadedFile(
         UploadedFile $file,
         string $disk,
-        int $entityId,
-        string $storageContext,
-        string $storedName,
+        string $storagePath,
         ?string $mimeType
     ): ?array {
         return $this->generateThumbnailFromSourcePath(
             $file->getPathname(),
             $disk,
-            $entityId,
-            $storageContext,
-            $storedName,
+            $storagePath,
             $mimeType
         );
     }
@@ -398,9 +390,7 @@ class MediaLibraryService
     private function generateThumbnailFromSourcePath(
         string $sourcePath,
         string $disk,
-        int $entityId,
-        string $storageContext,
-        string $storedName,
+        string $storagePath,
         ?string $mimeType
     ): ?array {
         if (!$this->canGenerateThumbnail($sourcePath, $mimeType)) {
@@ -413,9 +403,7 @@ class MediaLibraryService
         }
 
         $thumbnailPath = $this->buildThumbnailPath(
-            $entityId,
-            $storageContext,
-            $storedName,
+            $storagePath,
             $rendered['extension']
         );
 
@@ -575,5 +563,72 @@ class MediaLibraryService
         } while (MediaItem::withTrashed()->where('public_key', $candidate)->exists());
 
         return $candidate;
+    }
+
+    private function generateOpaqueBucket(string $logicalKey): string
+    {
+        return substr(hash_hmac('sha256', $logicalKey, (string) config('media.storage_hash_key')), 0, 24);
+    }
+
+    private function buildStorageFileName(string $originalName, string $storageSuffixKey): string
+    {
+        $baseName = trim(pathinfo($originalName, PATHINFO_FILENAME));
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $safeBase = $baseName !== '' ? $baseName : 'file';
+
+        return $extension
+            ? sprintf('%s--%s.%s', $safeBase, $storageSuffixKey, $extension)
+            : sprintf('%s--%s', $safeBase, $storageSuffixKey);
+    }
+
+    private function sanitizeOriginalFileName(string $originalName): string
+    {
+        $cleaned = preg_replace('/[<>:"\/\\\\|?*\x00-\x1F]/u', '-', $originalName) ?? '';
+        $cleaned = preg_replace('/\s+/u', ' ', $cleaned) ?? '';
+        $cleaned = trim($cleaned, " .\t\n\r\0\x0B");
+
+        if ($cleaned !== '') {
+            return $cleaned;
+        }
+
+        return 'file';
+    }
+
+    private function generateUniqueStorageSuffixKey(string $modelClass): string
+    {
+        do {
+            $candidate = $this->generateStorageSuffixKey();
+        } while ($modelClass::withTrashed()->where('storage_suffix_key', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    private function generateStorageSuffixKey(): string
+    {
+        $timestampPart = $this->toBase32((int) floor(microtime(true) * 1000));
+        $timestampPart = str_pad(substr($timestampPart, -6), 6, '0', STR_PAD_LEFT);
+
+        $randomValue = random_int(0, (32 ** 6) - 1);
+        $randomPart = str_pad($this->toBase32($randomValue), 6, '0', STR_PAD_LEFT);
+
+        return strtolower($timestampPart . $randomPart);
+    }
+
+    private function toBase32(int $value): string
+    {
+        $alphabet = '0123456789abcdefghijklmnopqrstuv';
+
+        if ($value <= 0) {
+            return '0';
+        }
+
+        $encoded = '';
+
+        while ($value > 0) {
+            $encoded = $alphabet[$value % 32] . $encoded;
+            $value = intdiv($value, 32);
+        }
+
+        return $encoded;
     }
 }

@@ -18,6 +18,8 @@ class MediaItem extends Model
         'public_key',
         'folder_id',
         'storage_disk',
+        'storage_bucket',
+        'storage_suffix_key',
         'storage_path',
         'storage_context',
         'file_name',

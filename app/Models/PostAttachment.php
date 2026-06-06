@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class PostAttachment extends Model
 {
@@ -17,6 +18,9 @@ class PostAttachment extends Model
 
     protected $fillable = [
         'post_id',
+        'public_key',
+        'storage_bucket',
+        'storage_suffix_key',
         'attachment_title',
         'attachment_uri',
         'attachment_type',
@@ -33,6 +37,11 @@ class PostAttachment extends Model
         'file_size' => 'integer',
         'sort_order' => 'integer',
         'uploaded_by' => 'integer',
+    ];
+
+    protected $appends = [
+        'url',
+        'formatted_size',
     ];
 
     /**
@@ -90,8 +99,24 @@ class PostAttachment extends Model
         if (filter_var($this->attachment_uri, FILTER_VALIDATE_URL)) {
             return $this->attachment_uri;
         }
-        
-        return Storage::url($this->attachment_uri);
+
+        if ($this->usesProxyUrls()) {
+            return route('post-attachments.public.show', [
+                'publicKey' => $this->ensurePublicKey(),
+                'filename' => $this->publicFileName(),
+            ]);
+        }
+
+        return $this->directUrl();
+    }
+
+    public function directUrl(): string
+    {
+        if (filter_var($this->attachment_uri, FILTER_VALIDATE_URL)) {
+            return $this->attachment_uri;
+        }
+
+        return rtrim(config('app.url'), '/') . Storage::disk('public')->url($this->attachment_uri);
     }
 
     /**
@@ -113,6 +138,31 @@ class PostAttachment extends Model
         }
 
         return round($size, 2) . ' ' . $units[$unit];
+    }
+
+    public function publicFileName(): string
+    {
+        $source = $this->file_name ?: $this->attachment_title ?: 'attachment';
+        $extension = strtolower(pathinfo($source, PATHINFO_EXTENSION));
+        $name = pathinfo($source, PATHINFO_FILENAME);
+        $slug = Str::slug($name) ?: 'attachment-file';
+
+        return $extension ? "{$slug}.{$extension}" : $slug;
+    }
+
+    public function ensurePublicKey(): string
+    {
+        if ($this->public_key) {
+            return $this->public_key;
+        }
+
+        do {
+            $candidate = strtolower(Str::random(24));
+        } while (static::withTrashed()->where('public_key', $candidate)->exists());
+
+        $this->forceFill(['public_key' => $candidate])->saveQuietly();
+
+        return (string) $this->public_key;
     }
 
     /**
@@ -153,8 +203,13 @@ class PostAttachment extends Model
     {
         static::deleting(function ($attachment) {
             if ($attachment->attachment_uri && !filter_var($attachment->attachment_uri, FILTER_VALIDATE_URL)) {
-                Storage::delete($attachment->attachment_uri);
+                Storage::disk('public')->delete($attachment->attachment_uri);
             }
         });
+    }
+
+    private function usesProxyUrls(): bool
+    {
+        return config('media.public_url_mode', 'direct') === 'proxy';
     }
 }

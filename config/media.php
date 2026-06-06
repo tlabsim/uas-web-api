@@ -32,6 +32,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public Post Attachment Route Prefix
+    |--------------------------------------------------------------------------
+    */
+    'attachment_route_prefix' => env('MEDIA_ATTACHMENT_ROUTE_PREFIX', 'attachments'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Opaque Storage Hash Key
+    |--------------------------------------------------------------------------
+    |
+    | Used to derive opaque direct-storage bucket names for media and post
+    | attachments. Keep this stable once files have been created.
+    |
+    */
+    'storage_hash_key' => env('MEDIA_STORAGE_HASH_KEY', env('APP_KEY')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache-Control Max Age
     |--------------------------------------------------------------------------
     */

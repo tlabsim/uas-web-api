@@ -54,13 +54,14 @@ class PostAttachmentService
      */
     public function uploadFile(Post $post, UploadedFile $file, array $options = []): PostAttachment
     {
-        // Generate unique filename
-        $extension = $file->getClientOriginalExtension();
-        $originalName = $file->getClientOriginalName();
-        $filename = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) . '_' . time() . '.' . $extension;
+        $originalName = $this->sanitizeOriginalFileName($file->getClientOriginalName());
+        $storageBucket = $this->buildOpaqueBucketForPost($post);
+        $storageSuffixKey = $this->generateUniqueStorageSuffixKey();
+        $directory = 'post-attachments/' . $storageBucket;
+        $filename = $this->buildStorageFileName($originalName, $storageSuffixKey);
 
         // Store file
-        $path = $file->storeAs("post-attachments/{$post->id}", $filename, 'public');
+        $path = $file->storeAs($directory, $filename, 'public');
 
         // Determine attachment type
         $mimeType = $file->getMimeType();
@@ -68,6 +69,9 @@ class PostAttachmentService
 
         // Create attachment record
         return $post->attachments()->create([
+            'public_key' => strtolower(Str::random(24)),
+            'storage_bucket' => $storageBucket,
+            'storage_suffix_key' => $storageSuffixKey,
             'attachment_title' => $options['title'] ?? $originalName,
             'attachment_uri' => $path,
             'attachment_type' => $attachmentType,
@@ -238,5 +242,76 @@ class PostAttachmentService
             'allowed_types' => $category->allowed_types,
             'help_text' => $category->attachment_config['help_text'] ?? null,
         ];
+    }
+
+    private function buildOpaqueBucketForPost(Post $post): string
+    {
+        return substr(
+            hash_hmac('sha256', sprintf('post-attachments|post:%s', $post->id), (string) config('media.storage_hash_key')),
+            0,
+            24
+        );
+    }
+
+    private function buildStorageFileName(string $originalName, string $storageSuffixKey): string
+    {
+        $baseName = trim(pathinfo($originalName, PATHINFO_FILENAME));
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $safeBase = $baseName !== '' ? $baseName : 'attachment';
+
+        return $extension
+            ? sprintf('%s--%s.%s', $safeBase, $storageSuffixKey, $extension)
+            : sprintf('%s--%s', $safeBase, $storageSuffixKey);
+    }
+
+    private function sanitizeOriginalFileName(string $originalName): string
+    {
+        $cleaned = preg_replace('/[<>:"\/\\\\|?*\x00-\x1F]/u', '-', $originalName) ?? '';
+        $cleaned = preg_replace('/\s+/u', ' ', $cleaned) ?? '';
+        $cleaned = trim($cleaned, " .\t\n\r\0\x0B");
+
+        if ($cleaned !== '') {
+            return $cleaned;
+        }
+
+        return 'attachment';
+    }
+
+    private function generateUniqueStorageSuffixKey(): string
+    {
+        do {
+            $candidate = $this->generateStorageSuffixKey();
+        } while (PostAttachment::withTrashed()->where('storage_suffix_key', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    private function generateStorageSuffixKey(): string
+    {
+        $timestampPart = $this->toBase32((int) floor(microtime(true) * 1000));
+        $timestampPart = str_pad(substr($timestampPart, -6), 6, '0', STR_PAD_LEFT);
+
+        $randomValue = random_int(0, (32 ** 6) - 1);
+        $randomPart = str_pad($this->toBase32($randomValue), 6, '0', STR_PAD_LEFT);
+
+        return strtolower($timestampPart . $randomPart);
+    }
+
+    private function toBase32(int $value): string
+    {
+        $alphabet = '0123456789abcdefghijklmnopqrstuv';
+
+        if ($value <= 0) {
+            return '0';
+        }
+
+        $encoded = '';
+
+        while ($value > 0) {
+            $encoded = $alphabet[$value % 32] . $encoded;
+            $value = intdiv($value, 32);
+        }
+
+        return $encoded;
     }
 }
