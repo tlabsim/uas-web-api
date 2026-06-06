@@ -103,12 +103,14 @@ class MediaItem extends Model
 
     public function directFullUrl(): string
     {
-        if ($this->public_url && filter_var($this->public_url, FILTER_VALIDATE_URL)) {
-            return $this->public_url;
+        $normalizedPublicUrl = $this->normalizeStoredUrl($this->public_url);
+
+        if ($normalizedPublicUrl && preg_match('/^https?:\/\//i', $normalizedPublicUrl)) {
+            return $normalizedPublicUrl;
         }
 
-        return $this->public_url
-            ? rtrim(config('app.url'), '/') . '/' . ltrim($this->public_url, '/')
+        return $normalizedPublicUrl
+            ? rtrim(config('app.url'), '/') . '/' . ltrim($normalizedPublicUrl, '/')
             : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->storage_path);
     }
 
@@ -118,12 +120,14 @@ class MediaItem extends Model
             return null;
         }
 
-        if ($this->thumbnail_url && filter_var($this->thumbnail_url, FILTER_VALIDATE_URL)) {
-            return $this->thumbnail_url;
+        $normalizedThumbnailUrl = $this->normalizeStoredUrl($this->thumbnail_url);
+
+        if ($normalizedThumbnailUrl && preg_match('/^https?:\/\//i', $normalizedThumbnailUrl)) {
+            return $normalizedThumbnailUrl;
         }
 
-        return $this->thumbnail_url
-            ? rtrim(config('app.url'), '/') . '/' . ltrim($this->thumbnail_url, '/')
+        return $normalizedThumbnailUrl
+            ? rtrim(config('app.url'), '/') . '/' . ltrim($normalizedThumbnailUrl, '/')
             : rtrim(config('app.url'), '/') . Storage::disk($this->storage_disk)->url($this->thumbnail_path);
     }
 
@@ -178,5 +182,28 @@ class MediaItem extends Model
         $slug = Str::slug($name) ?: 'media-file';
 
         return $extension ? "{$slug}.{$extension}" : $slug;
+    }
+
+    private function normalizeStoredUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $escapedAppUrl = preg_quote($appUrl, '/');
+
+        $url = preg_replace('/^' . $escapedAppUrl . '\/(?=https?:?\/?\/?)/i', '', $url) ?? $url;
+        $url = preg_replace('/^(https?):?(\/\/)?/i', '$1://', $url) ?? $url;
+        $url = preg_replace('/^(https?):\/(?!\/)/i', '$1://', $url) ?? $url;
+        $url = preg_replace('/^' . $escapedAppUrl . '(?=https?:?\/?\/?)/i', '', $url) ?? $url;
+
+        if (preg_match('/^(https?:\/\/[^\/]+)(https?:\/\/.+)$/i', $url, $matches)) {
+            $url = $matches[2];
+        }
+
+        return $url;
     }
 }

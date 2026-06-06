@@ -25,12 +25,13 @@ class MediaLibraryService
         $storageContext = $this->sanitizeStorageContext($options['storage_context'] ?? 'uploads');
         $originalName = $this->sanitizeOriginalFileName($file->getClientOriginalName());
         $baseName = pathinfo($originalName, PATHINFO_FILENAME);
+        $periodKey = now()->format('Ym');
         $storageBucket = $this->generateOpaqueBucket(
-            sprintf('media|entity:%s|context:%s|period:%s', $entityId, $storageContext, now()->format('Y/m'))
+            sprintf('media|entity:%s|context:%s|period:%s', $entityId, $storageContext, $periodKey)
         );
         $storageSuffixKey = $this->generateUniqueStorageSuffixKey(MediaItem::class);
         $storedName = $this->buildStorageFileName($originalName, $storageSuffixKey);
-        $storagePath = $this->buildStoragePath($storageBucket, $storedName);
+        $storagePath = $this->buildStoragePath($entityId, $periodKey, $storageBucket, $storedName);
         Storage::disk($disk)->putFileAs(
             dirname($storagePath),
             $file,
@@ -360,9 +361,9 @@ class MediaLibraryService
         return $segments->isNotEmpty() ? $segments->implode('/') : 'uploads';
     }
 
-    private function buildStoragePath(string $bucket, string $fileName): string
+    private function buildStoragePath(int $entityId, string $periodKey, string $bucket, string $fileName): string
     {
-        return "media/{$bucket}/{$fileName}";
+        return sprintf('media/e%d/%s/%s/%s', $entityId, $periodKey, $bucket, $fileName);
     }
 
     private function buildThumbnailPath(string $storagePath, string $extension): string

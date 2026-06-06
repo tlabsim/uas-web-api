@@ -57,7 +57,7 @@ class PostAttachmentService
         $originalName = $this->sanitizeOriginalFileName($file->getClientOriginalName());
         $storageBucket = $this->buildOpaqueBucketForPost($post);
         $storageSuffixKey = $this->generateUniqueStorageSuffixKey();
-        $directory = 'post-attachments/' . $storageBucket;
+        $directory = sprintf('post-attachments/p%d_%s', $post->id, $storageBucket);
         $filename = $this->buildStorageFileName($originalName, $storageSuffixKey);
 
         // Store file

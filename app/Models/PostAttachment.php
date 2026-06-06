@@ -112,8 +112,10 @@ class PostAttachment extends Model
 
     public function directUrl(): string
     {
-        if (filter_var($this->attachment_uri, FILTER_VALIDATE_URL)) {
-            return $this->attachment_uri;
+        $normalizedAttachmentUrl = $this->normalizeStoredUrl($this->attachment_uri);
+
+        if ($normalizedAttachmentUrl && preg_match('/^https?:\/\//i', $normalizedAttachmentUrl)) {
+            return $normalizedAttachmentUrl;
         }
 
         return rtrim(config('app.url'), '/') . Storage::disk('public')->url($this->attachment_uri);
@@ -211,5 +213,28 @@ class PostAttachment extends Model
     private function usesProxyUrls(): bool
     {
         return config('media.public_url_mode', 'direct') === 'proxy';
+    }
+
+    private function normalizeStoredUrl(?string $url): ?string
+    {
+        $url = trim((string) $url);
+
+        if ($url === '') {
+            return null;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $escapedAppUrl = preg_quote($appUrl, '/');
+
+        $url = preg_replace('/^' . $escapedAppUrl . '\/(?=https?:?\/?\/?)/i', '', $url) ?? $url;
+        $url = preg_replace('/^(https?):?(\/\/)?/i', '$1://', $url) ?? $url;
+        $url = preg_replace('/^(https?):\/(?!\/)/i', '$1://', $url) ?? $url;
+        $url = preg_replace('/^' . $escapedAppUrl . '(?=https?:?\/?\/?)/i', '', $url) ?? $url;
+
+        if (preg_match('/^(https?:\/\/[^\/]+)(https?:\/\/.+)$/i', $url, $matches)) {
+            $url = $matches[2];
+        }
+
+        return $url;
     }
 }

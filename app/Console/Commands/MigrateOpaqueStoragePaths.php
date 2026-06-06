@@ -86,7 +86,7 @@ class MigrateOpaqueStoragePaths extends Command
                         continue;
                     }
 
-                    $period = optional($item->created_at)->format('Y/m') ?: now()->format('Y/m');
+                    $period = optional($item->created_at)->format('Ym') ?: now()->format('Ym');
                     $context = $this->sanitizeStorageContext($item->storage_context ?: 'uploads');
                     $storageBucket = $item->storage_bucket ?: $this->generateOpaqueBucket(
                         sprintf('media|entity:%s|context:%s|period:%s', $item->owner_entity_id, $context, $period)
@@ -98,7 +98,7 @@ class MigrateOpaqueStoragePaths extends Command
                     );
                     $preferredName = $this->sanitizeOriginalFileName($item->original_name ?: $item->file_name ?: 'file');
                     $targetFileName = $this->buildStorageFileName($preferredName, $storageSuffixKey);
-                    $targetPath = "media/{$storageBucket}/{$targetFileName}";
+                    $targetPath = sprintf('media/e%d/%s/%s/%s', $item->owner_entity_id, $period, $storageBucket, $targetFileName);
 
                     $currentThumbPath = $item->thumbnail_path ?: null;
                     $targetThumbPath = $currentThumbPath
@@ -191,7 +191,7 @@ class MigrateOpaqueStoragePaths extends Command
                         $this->stripExistingStorageSuffix($attachment->file_name ?: $attachment->attachment_title ?: 'attachment')
                     );
                     $targetFileName = $this->buildStorageFileName($preferredName, $storageSuffixKey);
-                    $targetPath = "post-attachments/{$storageBucket}/{$targetFileName}";
+                    $targetPath = sprintf('post-attachments/p%d_%s/%s', $attachment->post_id, $storageBucket, $targetFileName);
 
                     if (
                         $attachment->attachment_uri === $targetPath
