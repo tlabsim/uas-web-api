@@ -53,7 +53,13 @@ class MenuController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Missing category_id parameter'], 400);
         }
 
-        $subcategories = EntityPageSubcategory::where('category_id', $categoryId)
+        $category = EntityPageCategory::where('entity_id', $scopeEntityId)->find($categoryId);
+
+        if (!$category) {
+            return response()->json(['status' => 'error', 'message' => 'You do not have permission to access this category'], 403);
+        }
+
+        $subcategories = EntityPageSubcategory::where('category_id', $category->id)
             ->orderBy('menu_order')
             ->get();
 
@@ -67,14 +73,26 @@ class MenuController extends Controller
     {
         $entityId = $request->attributes->get('current_role_scope');
 
+        if (!$entityId) {
+            return response()->json(['status' => 'error', 'message' => 'The request is possibly made without proper privilege'], 400);
+        }
+
         $request->validate([
-            'title' => 'required|string|max:255',
+            'category_name' => 'required|string|max:240',
+            'category_slug' => 'nullable|string|max:240',
+            'is_menu' => 'nullable|boolean',
+            'menu_text' => 'nullable|string|max:240',
+            'link_url' => 'nullable|string',
             'menu_order' => 'nullable|integer',
         ]);
 
         $category = EntityPageCategory::create([
             'entity_id' => $entityId,
-            'title' => $request->title,
+            'category_name' => $request->input('category_name'),
+            'category_slug' => $request->input('category_slug') ?: \Illuminate\Support\Str::slug($request->input('category_name')),
+            'is_menu' => (bool) $request->boolean('is_menu'),
+            'menu_text' => $request->boolean('is_menu') ? $request->input('menu_text') : null,
+            'link_url' => $request->boolean('is_menu') ? $request->input('link_url') : null,
             'menu_order' => $request->menu_order ?? 0,
         ]);
 
@@ -88,18 +106,29 @@ class MenuController extends Controller
     {
         $entityId = $request->attributes->get('current_role_scope');
 
+        if (!$entityId) {
+            return response()->json(['status' => 'error', 'message' => 'The request is possibly made without proper privilege'], 400);
+        }
+
         $request->validate([
             'category_id' => 'required|exists:entity_page_categories,id',
-            'title' => 'required|string|max:255',
+            'subcategory_name' => 'required|string|max:240',
+            'subcategory_slug' => 'nullable|string|max:240',
+            'is_menu' => 'nullable|boolean',
+            'menu_text' => 'nullable|string|max:240',
+            'link_url' => 'nullable|string',
             'menu_order' => 'nullable|integer',
         ]);
 
         $category = EntityPageCategory::where('entity_id', $entityId)->findOrFail($request->category_id);
 
         $subcategory = EntityPageSubcategory::create([
-            'entity_id' => $entityId,
             'category_id' => $category->id,
-            'title' => $request->title,
+            'subcategory_name' => $request->input('subcategory_name'),
+            'subcategory_slug' => $request->input('subcategory_slug') ?: \Illuminate\Support\Str::slug($request->input('subcategory_name')),
+            'is_menu' => (bool) $request->boolean('is_menu'),
+            'menu_text' => $request->boolean('is_menu') ? $request->input('menu_text') : null,
+            'link_url' => $request->boolean('is_menu') ? $request->input('link_url') : null,
             'menu_order' => $request->menu_order ?? 0,
         ]);
 
@@ -136,15 +165,25 @@ class MenuController extends Controller
      */
     public function updateCategoriesAll(Request $request)
     {
+        $scopeEntityId = $request->attributes->get('current_role_scope');
+
         \Log::info('Updating categories and subcategories', ['entity_id' => $request->input('entity_id')]);
+
+        if (!$scopeEntityId) {
+            return response()->json(['status' => 'error', 'message' => 'The request is possibly made without proper privilege'], 400);
+        }
 
         $request->validate([
             'entity_id' => 'required|integer',
-            'categories' => 'required|array'
+            'categories' => 'present|nullable|array'
         ]);
 
         $entityId = $request->input('entity_id');
-        $categories = $request->input('categories');
+        $categories = $request->input('categories') ?? [];
+
+        if ((int) $entityId !== (int) $scopeEntityId) {
+            return response()->json(['status' => 'error', 'message' => 'You do not have permission to update this entity'], 403);
+        }
 
         $updated = [];
 
@@ -229,7 +268,27 @@ class MenuController extends Controller
                     }
                     $subcategoryDeleteQuery->delete();
 
-                    $updated[] = $catData;
+                    $updated[] = [
+                        'id' => $category->id,
+                        'category_name' => $category->category_name,
+                        'category_slug' => $category->category_slug,
+                        'is_menu' => $category->is_menu,
+                        'menu_text' => $category->menu_text,
+                        'link_url' => $category->link_url,
+                        'menu_order' => $category->menu_order,
+                        'subcategories' => EntityPageSubcategory::where('category_id', $category->id)
+                            ->orderBy('menu_order')
+                            ->get([
+                                'id',
+                                'subcategory_name',
+                                'subcategory_slug',
+                                'is_menu',
+                                'menu_text',
+                                'link_url',
+                                'menu_order',
+                            ])
+                            ->toArray(),
+                    ];
                 }
 
                 // Delete subcategories that belong to categories removed from this entity

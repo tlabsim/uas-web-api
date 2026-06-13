@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
 use App\Http\Controllers\EntityController;
+use App\Http\Controllers\EntityNavigationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PostController;
 use App\Http\Controllers\PersonnelController;
@@ -37,6 +38,7 @@ Route::middleware([])->group(function () {
     Route::get('entity', [EntityController::class, 'show']);           // Input: ?entity_id or ?slug
     Route::get('entity/menus', [EntityController::class, 'menus']);    // Input: ?entity_id
     Route::get('entity/settings', [EntityController::class, 'settings']); // Input: ?entity_id
+    Route::get('entity/navigation', [EntityNavigationController::class, 'show']); // Input: ?entity_id
 
     // 🔹 Static Pages
     Route::get('pages', [PageController::class, 'index']);             // Input: ?entity_id, optional: category_id, subcategory_id
