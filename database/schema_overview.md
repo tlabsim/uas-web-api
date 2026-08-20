@@ -16,6 +16,7 @@ This document catalogs the current database schema for the **NSTU Web API** proj
 - [Personnel Directory](#personnel-directory)
   - [`personnel_profiles`](#personnel_profiles)
   - [`personnels_cache`](#personnels_cache)
+  - [`personnel_affiliations_cache`](#personnel_affiliations_cache)
   - [`personnel_web_settings`](#personnel_web_settings)
   - [`personnel_additional_data`](#personnel_additional_data)
   - [`personnel_educations`](#personnel_educations)
@@ -62,7 +63,7 @@ This document catalogs the current database schema for the **NSTU Web API** proj
 - **Purpose:** Denormalized snapshot of selected attributes from the core `entities` table for faster reads in the Web API.
 - **Key Columns:** Capture names, localized variations, classification, hierarchy, logos, and ordering.
 - **Relationships:** `entity_id` FK to `entity_profiles` (cascades).
-- **Usage Notes:** Refreshed via background sync from IMS Core.
+- **Usage Notes:** Refreshed via background sync from IMS Core. Includes `teachers_cache_synced_at` to track teacher-directory cache freshness per entity.
 
 ### `entity_web_settings`
 - **Purpose:** Key-value configuration store scoped by entity (branding, theme options, contact info, etc.).
@@ -107,7 +108,21 @@ This document catalogs the current database schema for the **NSTU Web API** proj
 - **Purpose:** Denormalized cache of personnel details from IMS Core for fast public rendering.
 - **Key Columns:** Titles, localized names, designation, status, contact info, employment metadata, and profile photo URL.
 - **Relationships:** `personnel_id` FK to `personnel_profiles` (cascades).
-- **Usage Notes:** Updated via sync jobs to reflect the core system.
+- **Usage Notes:** Updated via sync jobs to reflect the core system. Also stores quick-access primary affiliation snapshot fields used by entity websites:
+  - `primary_affiliation_entity_id`
+  - `primary_affiliation_name`
+  - `primary_affiliation_type`
+  - `affiliations_cached_at`
+
+### `personnel_affiliations_cache`
+- **Purpose:** Entity-scoped cache of personnel affiliations synced from IMS Core.
+- **Key Columns:**
+  - `source_affiliation_id` – stable upstream affiliation identifier from IMS.
+  - `personnel_id` FK to `personnel_profiles`.
+  - `entity_id` FK to `entity_profiles`.
+  - `entity_name`, `affiliation_type`, `is_primary`, `is_active`.
+  - `start_date`, `end_date`, `synced_at`.
+- **Usage Notes:** Used as the primary read source for faculty/staff directory views and entity-scoped people search without querying IMS on every request.
 
 ### `personnel_web_settings`
 - **Purpose:** Personnel-specific key-value settings (e.g., visibility toggles, custom sections).

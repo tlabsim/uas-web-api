@@ -31,6 +31,13 @@ class PostController extends Controller
             })
             ->orderByDesc('published_at');
 
+        $includes = collect(explode(',', (string) $request->input('include')))
+            ->map(fn (string $include) => trim($include));
+
+        if ($includes->contains('attachments')) {
+            $query->with(['attachments' => fn ($attachments) => $attachments->ordered()]);
+        }
+
         if ($request->filled('category')) {
             $query->where('category', $request->category);
         }
@@ -64,7 +71,7 @@ class PostController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Missing post id'], 400);
         }
 
-        $post = Post::with(['attachments', 'meta', 'taggedEntities'])
+        $post = Post::with(['attachments', 'metadata', 'taggedEntities'])
             ->where('id', $request->id)
             ->where('post_status', 'Published')
             ->first();

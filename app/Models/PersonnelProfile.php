@@ -22,6 +22,11 @@ class PersonnelProfile extends Model
         return $this->hasOne(PersonnelCache::class, 'personnel_id');
     }
 
+    public function affiliationCache()
+    {
+        return $this->hasMany(PersonnelAffiliationCache::class, 'personnel_id', 'personnel_id');
+    }
+
     public function webSettings()
     {
         return $this->hasMany(PersonnelWebSetting::class, 'personnel_id');
@@ -49,7 +54,7 @@ class PersonnelProfile extends Model
 
     public function professionalProfiles()
     {
-        return $this->hasMany(PersonnelProfessionalProfile::class, 'personnel_id');
+        return $this->hasMany(PersonnelProfessionalProfile::class, 'personnel_id')->orderBy('id');
     }
 
     public function researcherProfile()

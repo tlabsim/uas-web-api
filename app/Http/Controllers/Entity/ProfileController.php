@@ -5,11 +5,17 @@ namespace App\Http\Controllers\Entity;
 use App\Http\Controllers\Controller;
 use App\Models\EntityProfile;
 use App\Models\EntityCache;
+use App\Services\ImsPersonnelCacheService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        protected ImsPersonnelCacheService $personnelCacheService
+    ) {
+    }
+
     public function show(Request $request)
     {
         $entityId = $request->input('entity_id');
@@ -27,6 +33,7 @@ class ProfileController extends Controller
                 ['entity_id' => $entityId],
                 [
                     'establishment_date' => null,
+                    'entity_introduction' => null,
                     'slug' => null,
                     'head_personnel_id' => null,
                     'head_role_assignment_id' => null,
@@ -38,6 +45,11 @@ class ProfileController extends Controller
                 ]
             );
 
+            $resolvedHeadPhotoUrl = $profile->head_info_photo_url;
+            if (!$resolvedHeadPhotoUrl && $profile->head_personnel_id) {
+                $resolvedHeadPhotoUrl = $this->personnelCacheService->resolvePhotoUrl((string) $profile->head_personnel_id);
+            }
+
             // Get cached entity data
             $entityCache = EntityCache::where('entity_id', $entityId)->first();
 
@@ -45,13 +57,14 @@ class ProfileController extends Controller
             $entityData = [
                 'entity_id' => $profile->entity_id,
                 'establishment_date' => $profile->establishment_date,
+                'entity_introduction' => $profile->entity_introduction,
                 'slug' => $profile->slug,
                 'head_personnel_id' => $profile->head_personnel_id,
                 'head_role_assignment_id' => $profile->head_role_assignment_id,
                 'head_role_name' => $profile->head_role_name,
                 'head_info_name' => $profile->head_info_name,
                 'head_info_designation' => $profile->head_info_designation,
-                'head_info_photo_url' => $profile->head_info_photo_url,
+                'head_info_photo_url' => $resolvedHeadPhotoUrl,
                 'head_message' => $profile->head_message,
             ];
 
@@ -107,6 +120,7 @@ class ProfileController extends Controller
         $validator = Validator::make($request->all(), [
             'entity_id' => 'required|integer',
             'establishment_date' => 'nullable|date',
+            'entity_introduction' => 'nullable|string|max:2000',
             'slug' => 'required|string|max:50|alpha_dash',
             'head_personnel_id' => 'nullable|string',
             'head_role_assignment_id' => 'nullable|integer',
@@ -146,6 +160,7 @@ class ProfileController extends Controller
                 ['entity_id' => $entityId],
                 [
                     'establishment_date' => $validated['establishment_date'],
+                    'entity_introduction' => $validated['entity_introduction'] ?? null,
                     'slug' => $validated['slug'],
                     'head_personnel_id' => $validated['head_personnel_id'] ?? null,
                     'head_role_assignment_id' => $validated['head_role_assignment_id'] ?? null,

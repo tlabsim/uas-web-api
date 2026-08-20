@@ -208,7 +208,7 @@ class PostCategorySeeder extends Seeder
                 ],
             ],
             [
-                'name' => 'Activity (NSTU Life)',
+                'name' => 'Activity',
                 'slug' => 'activity',
                 'description' => 'Campus activities and programs',
                 'icon' => 'activity',
@@ -222,7 +222,7 @@ class PostCategorySeeder extends Seeder
                             'type' => 'select_editable',
                             'required' => true,
                             'searchable' => true,
-                            'options' => ["Campus Event", "Nature @ NSTU", "Cultural Event", "Sports Event", "Observation", "Festival", "Community Service", "Innovation"]
+                            'options' => ["Campus Event", "Nature", "Cultural Event", "Sports Event", "Observation", "Festival", "Community Service", "Innovation"]
                         ]               
                     ],
                     'extra_fields' => [

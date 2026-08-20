@@ -16,10 +16,14 @@ return new class extends Migration {
             $table->string('title_bn', 240)->nullable();
             $table->string('name', 240);
             $table->string('name_bn', 240);
+            $table->string('display_name', 1024)->nullable();
+            $table->string('display_name_bn', 1024)->nullable();
             $table->string('short_name', 240)->nullable();
             $table->string('short_name_bn', 240)->nullable();
             $table->text('description')->nullable();
             $table->text('logo_url')->nullable();
+            $table->json('address')->nullable();
+            $table->timestamp('address_synced_at')->nullable();
             $table->integer('entity_order')->default(0);
             $table->timestamps();
 

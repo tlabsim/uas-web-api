@@ -41,6 +41,41 @@ Folders are for internal organization. Galleries are for public presentation.
 
 Only published galleries are returned publicly.
 
+## Public Entity Site Endpoints
+
+- `GET /api/teachers?entity_id={id}`
+- `GET /api/teachers?entity_id={id}&search={term}`
+- `GET /api/teachers?entity_id={id}&primary_only=1`
+- `GET /api/teachers?entity_id={id}&affiliation_type=Permanent,Contractual`
+- `GET /api/teacher?personnel_id={id}`
+- `GET /api/teacher?personnel_id={id}&entity_id={entityId}`
+- `GET /api/search?entity_id={id}&q={term}`
+
+### Teacher Directory Cache Behavior
+
+The teacher directory is served from cache-first data in:
+
+- `personnels_cache`
+- `personnel_affiliations_cache`
+
+When `GET /api/teachers` is requested, the API attempts an on-demand IMS refresh only if the entity's teacher cache is stale. If IMS is temporarily unavailable but cached rows already exist for that entity, the API serves the cached directory instead of failing the request.
+
+The `meta.cache` object in the `GET /api/teachers` response indicates whether the request:
+
+- refreshed from IMS
+- was served from cache
+- fell back to stale cache because IMS refresh failed
+
+### Entity Search Scope
+
+`GET /api/search` is entity-scoped and returns grouped results for:
+
+- published static pages
+- published posts
+- people affiliated with the entity
+
+People results are sourced from the affiliation cache and personnel cache, so entity websites can search faculty/staff without querying IMS directly.
+
 ## Editor Media And Gallery Endpoints
 
 Protected Web Curator endpoints:

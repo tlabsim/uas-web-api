@@ -19,8 +19,8 @@ return [
     ],
 
     'allowed_origins_patterns' => [
-        '/^http:\/\/.*\.nstu\.local$/',
-        '/^https:\/\/.*\.nstu\.edu\.bd$/',
+        '/^http:\/\/.*\.nstu\.local(:\d+)?$/',
+        '/^https:\/\/.*\.nstu\.edu\.bd(:\d+)?$/',
     ],
 
     'allowed_headers' => [

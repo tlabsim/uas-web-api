@@ -8,9 +8,15 @@ use App\Models\EntityProfile;
 use App\Models\EntityCache;
 use App\Models\EntityWebSetting;
 use App\Models\EntityPageCategory;
+use App\Services\ImsPersonnelCacheService;
 
 class EntityController extends Controller
 {
+    public function __construct(
+        protected ImsPersonnelCacheService $personnelCacheService
+    ) {
+    }
+
     /**
      * List all entities (optionally filtered by type or category).
      * Example: GET /api/v1/entities?type=Department
@@ -27,7 +33,7 @@ class EntityController extends Controller
         }
 
         // Also force update cache if no corresponding Cache not found
-        if (EntityCache::count() == EntityProfile::count()) {
+        if (EntityCache::count() != EntityProfile::count()) {
             $this->updateCache();
         }        
 
@@ -67,8 +73,9 @@ class EntityController extends Controller
                 if ($response === false) {
                     return response()->json(['status' => 'error', 'message' => 'Failed to fetch entity data from IMS'], 500);
                 }
-                $entityDataResponse = json_decode($response);
-                if (!$entityDataResponse) {
+                $decodedResponse = json_decode($response);
+                $entityDataResponse = $decodedResponse->data ?? $decodedResponse;
+                if (!$entityDataResponse || !is_object($entityDataResponse)) {
                     return response()->json(['status' => 'error', 'message' => 'Invalid response from IMS'], 500);
                 }
 
@@ -79,14 +86,6 @@ class EntityController extends Controller
                     $entityData = new EntityCache();
                     $entityData->entity_id = $profile->entity_id;
                 }
-                else
-                {
-                    // Skip if $entityDataResponse->updated_at is not newer than the existing cache
-                    if (isset($entityDataResponse->updated_at) && $entityData->updated_at >= $entityDataResponse->updated_at) {
-                        return response()->json(['status' => 'success', 'message' => 'Cache is already up-to-date'], 200);
-                    }
-                }
-                
                 // Update the cache with the new data
                 $entityData->entity_type = $entityDataResponse->type->name ?? null;
                 $entityData->entity_category = $entityDataResponse->type->entity_category ?? null;
@@ -101,10 +100,16 @@ class EntityController extends Controller
                 $entityData->title_bn = $entityDataResponse->title_bn ?? null;
                 $entityData->name = $entityDataResponse->name ?? null;
                 $entityData->name_bn = $entityDataResponse->name_bn ?? null;
+                $entityData->display_name = $entityDataResponse->full_name ?? $entityDataResponse->display_name ?? null;
+                $entityData->display_name_bn = $entityDataResponse->full_name_bn ?? $entityDataResponse->display_name_bn ?? null;
                 $entityData->short_name = $entityDataResponse->short_name ?? null;
                 $entityData->short_name_bn = $entityDataResponse->short_name_bn ?? null;
                 $entityData->description = $entityDataResponse->description ?? null;
                 $entityData->logo_url = $entityDataResponse->logo_src ?? null;
+                $entityData->address = isset($entityDataResponse->address)
+                    ? json_decode(json_encode($entityDataResponse->address), true)
+                    : null;
+                $entityData->address_synced_at = now();
                 $entityData->entity_order = $entityDataResponse->entity_order ?? 0;
                 // Set timestamps
                 $entityData->updated_at = now();
@@ -127,7 +132,8 @@ class EntityController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'Failed to fetch entities data from IMS'], 500);
             }
 
-            $entitiesDataResponse = json_decode($response);
+            $decodedResponse = json_decode($response);
+            $entitiesDataResponse = $decodedResponse->data ?? $decodedResponse;
             if (!$entitiesDataResponse || !is_array($entitiesDataResponse)) {
                 return response()->json(['status' => 'error', 'message' => 'Invalid response from IMS'], 500);
             }
@@ -148,14 +154,6 @@ class EntityController extends Controller
                     $entityData = new EntityCache();
                     $entityData->entity_id = $entityProfile->entity_id;
                 }
-                else
-                {
-                    // Skip if $entityDataResponse->updated_at is not newer than the existing cache
-                    if (isset($entityDataResponse->updated_at) && $entityData->updated_at >= $entityDataResponse->updated_at) {
-                        continue; // Skip this entity, cache is already up-to-date
-                    }
-                }
-
                 // Update the cache with the new data
                 $entityData->entity_type = $entityDataResponse->type->name ?? null;
                 $entityData->entity_category = $entityDataResponse->type->entity_category ?? null;
@@ -170,10 +168,16 @@ class EntityController extends Controller
                 $entityData->title_bn = $entityDataResponse->title_bn ?? null;
                 $entityData->name = $entityDataResponse->name ?? null;
                 $entityData->name_bn = $entityDataResponse->name_bn ?? null;
+                $entityData->display_name = $entityDataResponse->full_name ?? $entityDataResponse->display_name ?? null;
+                $entityData->display_name_bn = $entityDataResponse->full_name_bn ?? $entityDataResponse->display_name_bn ?? null;
                 $entityData->short_name = $entityDataResponse->short_name ?? null;
                 $entityData->short_name_bn = $entityDataResponse->short_name_bn ?? null;
                 $entityData->description = $entityDataResponse->description ?? null;
                 $entityData->logo_url = $entityDataResponse->logo_src ?? null;
+                $entityData->address = isset($entityDataResponse->address)
+                    ? json_decode(json_encode($entityDataResponse->address), true)
+                    : null;
+                $entityData->address_synced_at = now();
                 $entityData->entity_order = $entityDataResponse->entity_order ?? 0;
                 // Set timestamps
                 $entityData->updated_at = now();
@@ -205,6 +209,20 @@ class EntityController extends Controller
 
         if (!$profile) {
             return response()->json(['status' => 'error', 'message' => 'Entity not found'], 404);
+        }
+
+        $cacheThreshold = (int) config('ims.cache_update_threshold', 15);
+        $addressSyncedAt = $profile->cachedData?->address_synced_at;
+        if (!$addressSyncedAt || $addressSyncedAt->diffInMinutes(now()) > $cacheThreshold) {
+            $this->updateCache((int) $profile->entity_id);
+            $profile->load('cachedData');
+        }
+
+        if (!$profile->head_info_photo_url && $profile->head_personnel_id) {
+            $profile->setAttribute(
+                'head_info_photo_url',
+                $this->personnelCacheService->resolvePhotoUrl((string) $profile->head_personnel_id)
+            );
         }
 
         return response()->json(['status' => 'success', 'data' => $profile]);

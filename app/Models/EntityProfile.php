@@ -12,6 +12,7 @@ class EntityProfile extends Model
 
     protected $fillable = [
         'establishment_date',
+        'entity_introduction',
         'slug',
         'head_personnel_id',
         'head_role_assignment_id',

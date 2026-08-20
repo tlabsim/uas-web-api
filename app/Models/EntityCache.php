@@ -21,15 +21,21 @@ class EntityCache extends Model
         'title_bn',
         'name',        
         'name_bn',
+        'display_name',
+        'display_name_bn',
         'short_name',
         'short_name_bn',
         'description',
         'logo_url',
+        'address',
+        'address_synced_at',
         'entity_order',
     ];
 
     protected $casts = [       
         'entity_order' => 'integer',
+        'address' => 'array',
+        'address_synced_at' => 'datetime',
     ];
 
     protected $appends = [
@@ -45,12 +51,12 @@ class EntityCache extends Model
     //Full name attribute combining title and name
     public function getFullNameAttribute()
     {
-        return trim("{$this->title} {$this->name}");
+        return $this->display_name ?: trim("{$this->title} {$this->name}");
     }
 
     //Full name in Bangla attribute combining title_bn and name_bn
     public function getFullNameBnAttribute()
     {
-        return trim("{$this->title_bn} {$this->name_bn}");
+        return $this->display_name_bn ?: trim("{$this->title_bn} {$this->name_bn}");
     }
 }

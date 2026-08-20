@@ -9,6 +9,7 @@ return new class extends Migration {
         Schema::create('entity_profiles', function (Blueprint $table) {
             $table->unsignedBigInteger('entity_id')->primary()->comment('Refers to entity_id in entities table of core DB');            
             $table->date('establishment_date')->nullable();
+            $table->text('entity_introduction')->nullable()->comment('Brief introduction shown on the entity website');
                         
             // The following two fields refer to core DB personnels and roles to identity the head of the entity
             $table->string('head_personnel_id')->nullable()->comment('Refers to a personnel ID in the personnels table of core DB');

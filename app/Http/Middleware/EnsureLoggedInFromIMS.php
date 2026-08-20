@@ -11,12 +11,9 @@ class EnsureLoggedInFromIMS
 {
     public function handle($request, Closure $next)
     {          
-        $strict = false;
-        if(!strict) {
-            $imsUser = $request->cookie('ims_user');
-            if ($imsUser) {
-                return $next($request);
-            }
+        $imsUser = $request->cookie('ims_user');
+        if ($imsUser) {
+            return $next($request);
         }
 
         $imsAccessToken = $request->cookie('ims_access_token');

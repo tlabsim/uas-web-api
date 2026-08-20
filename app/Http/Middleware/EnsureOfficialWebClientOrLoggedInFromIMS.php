@@ -36,12 +36,9 @@ class EnsureOfficialWebClientOrLoggedInFromIMS
             return $next($request);
         }
 
-        $strict = false;
-        if(!strict) {
-            $imsUser = $request->cookie('ims_user');
-            if ($imsUser) {
-                return $next($request);
-            }
+        $imsUser = $request->cookie('ims_user');
+        if ($imsUser) {
+            return $next($request);
         }
 
         // Otherwise check if user is logged in via IMS

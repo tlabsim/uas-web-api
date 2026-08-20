@@ -7,7 +7,10 @@ use App\Http\Controllers\EntityController;
 use App\Http\Controllers\EntityNavigationController;
 use App\Http\Controllers\PageController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\PostPreviewController;
 use App\Http\Controllers\PersonnelController;
+use App\Http\Controllers\SearchController;
+use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\PublicationController;
 use App\Http\Controllers\ResearchController;
 use App\Http\Controllers\SnippetController;
@@ -22,6 +25,7 @@ use App\Http\Controllers\Editor\SnippetController as EditorSnippetController;
 use App\Http\Controllers\Editor\MediaFolderController as EditorMediaFolderController;
 use App\Http\Controllers\Editor\MediaItemController as EditorMediaItemController;
 use App\Http\Controllers\Editor\GalleryController as EditorGalleryController;
+use App\Http\Controllers\Api\PersonnelSelfEditController;
 use App\Http\Controllers\Entity\ProfileController as EntityProfileController;
 use App\Http\Controllers\Entity\SettingController as EntitySettingController;
 
@@ -47,9 +51,13 @@ Route::middleware([])->group(function () {
     // 🔹 Posts
     Route::get('posts', [PostController::class, 'index']);             // Input: ?entity_id, optional filters
     Route::get('post', [PostController::class, 'show']);               // Input: ?id
+    Route::get('preview/post', [PostPreviewController::class, 'show']);
 
     // 🔹 Personnel
     Route::get('personnel', [PersonnelController::class, 'show']);     // Input: ?personnel_id
+    Route::get('teachers', [TeacherController::class, 'index']);       // Input: ?entity_id, optional filters
+    Route::get('teacher', [TeacherController::class, 'show']);         // Input: ?personnel_id, optional: ?entity_id
+    Route::get('search', [SearchController::class, 'index']);          // Input: ?entity_id&q=
 
     // 🔹 Publications
     Route::get('publication', [PublicationController::class, 'show']); // Input: ?id
@@ -70,25 +78,33 @@ Route::middleware([])->group(function () {
     
 });
 
+// Self-edit routes (personnel editing own public profile)
+Route::middleware(['ims.logged_in'])->group(function () {
+    Route::post('self/personnel/short-bio', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateShortBio']);
+    Route::post('self/personnel/external-profiles', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateExternalProfiles']);
+    Route::post('self/personnel/photo', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updatePhoto']);
+    Route::delete('self/personnel/photo', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deletePhoto']);
+});
+
 // Only for web curators
 // This route group is protected by the 'ims.logged_in_and_role_selected:web_curator'
 // The middleware will inject the entity scope based on the selected role
 // 'ims.logged_in_and_role_selected:web_curator'
 Route::middleware(['ims.logged_in_and_role_selected:web_curator'])->group(function () {
     // Pages
-    Route::get('pages', [EditorPageController::class, 'index']);       // List all pages for editor
-    Route::post('pages', [EditorPageController::class, 'store']);
-    Route::put('pages/{id}', [EditorPageController::class, 'update']);
-    Route::delete('pages/{id}', [EditorPageController::class, 'destroy']);
+    Route::get('editor/pages', [EditorPageController::class, 'index']);       // List all pages for editor
+    Route::post('editor/pages', [EditorPageController::class, 'store']);
+    Route::put('editor/pages/{id}', [EditorPageController::class, 'update']);
+    Route::delete('editor/pages/{id}', [EditorPageController::class, 'destroy']);
 
     // Posts
-    Route::get('posts', [EditorPostController::class, 'index']);
-    Route::get('posts/{id}', [EditorPostController::class, 'show']);
-    Route::post('posts', [EditorPostController::class, 'store']);
-    Route::put('posts/{id}', [EditorPostController::class, 'update']);
-    Route::delete('posts/{id}', [EditorPostController::class, 'destroy']);
-    Route::post('posts/{id}/toggle-featured', [EditorPostController::class, 'toggleFeatured']);
-    Route::post('posts/{id}/update-status', [EditorPostController::class, 'updateStatus']);
+    Route::get('editor/posts', [EditorPostController::class, 'index']);
+    Route::get('editor/posts/{id}', [EditorPostController::class, 'show']);
+    Route::post('editor/posts', [EditorPostController::class, 'store']);
+    Route::put('editor/posts/{id}', [EditorPostController::class, 'update']);
+    Route::delete('editor/posts/{id}', [EditorPostController::class, 'destroy']);
+    Route::post('editor/posts/{id}/toggle-featured', [EditorPostController::class, 'toggleFeatured']);
+    Route::post('editor/posts/{id}/update-status', [EditorPostController::class, 'updateStatus']);
 
     // Post Categories (Write operations - require authentication)
     Route::post('post-categories', [PostCategoryController::class, 'store']);
@@ -114,10 +130,10 @@ Route::middleware(['ims.logged_in_and_role_selected:web_curator'])->group(functi
     Route::delete('subcategories/{id}', [EditorMenuController::class, 'destroySubcategory']);
 
     // Snippets
-    Route::get('snippets', [EditorSnippetController::class, 'index']);
-    Route::post('snippets', [EditorSnippetController::class, 'store']);
-    Route::put('snippets/{id}', [EditorSnippetController::class, 'update']);
-    Route::delete('snippets/{id}', [EditorSnippetController::class, 'destroy']);
+    Route::get('editor/snippets', [EditorSnippetController::class, 'index']);
+    Route::post('editor/snippets', [EditorSnippetController::class, 'store']);
+    Route::put('editor/snippets/{id}', [EditorSnippetController::class, 'update']);
+    Route::delete('editor/snippets/{id}', [EditorSnippetController::class, 'destroy']);
 
     // Media uploads
     Route::post('media/upload', [\App\Http\Controllers\Api\MediaController::class, 'uploadImage']);
@@ -154,9 +170,9 @@ Route::middleware(['ims.logged_in_and_role_selected:web_curator'])->group(functi
     Route::put('entity/profile', [EntityProfileController::class, 'update']);
 
     // Entity Settings
-    Route::get('entity/settings', [EntitySettingController::class, 'index']);
-    Route::post('entity/settings/create', [EntitySettingController::class, 'store']);
-    Route::put('entity/settings/{id}', [EntitySettingController::class, 'updateSingle']);
-    Route::delete('entity/settings/{id}', [EntitySettingController::class, 'destroy']);
-    Route::put('entity/settings', [EntitySettingController::class, 'update']);
+    Route::get('editor/entity/settings', [EntitySettingController::class, 'index']);
+    Route::post('editor/entity/settings/create', [EntitySettingController::class, 'store']);
+    Route::put('editor/entity/settings/{id}', [EntitySettingController::class, 'updateSingle']);
+    Route::delete('editor/entity/settings/{id}', [EntitySettingController::class, 'destroy']);
+    Route::put('editor/entity/settings', [EntitySettingController::class, 'update']);
 });
