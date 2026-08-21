@@ -9,7 +9,7 @@ return new class extends Migration {
         Schema::create('personnel_achievements', function (Blueprint $table) {
             $table->id();
             $table->char('personnel_id', 26);
-            $table->enum('type', ['Award', 'Achievement']);
+            $table->enum('type', ['Award', 'Scholarship', 'Achievement']);
             $table->text('title');
             $table->text('awarding_body')->nullable();
             $table->date('award_date')->nullable();

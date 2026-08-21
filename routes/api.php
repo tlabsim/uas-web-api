@@ -89,6 +89,7 @@ Route::middleware(['ims.logged_in'])->group(function () {
     Route::post('self/personnel/education', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateEducation']);
     Route::post('self/personnel/job-experiences', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateJobExperiences']);
     Route::post('self/personnel/training-seminars', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateTrainingSeminars']);
+    Route::post('self/personnel/achievements', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateAchievements']);
     Route::post('self/personnel/external-profiles', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateExternalProfiles']);
     Route::post('self/personnel/research-interests', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateResearchInterests']);
     Route::post('self/personnel/photo', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updatePhoto']);

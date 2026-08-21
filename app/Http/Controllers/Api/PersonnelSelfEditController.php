@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PersonnelAchievement;
 use App\Models\PersonnelCache;
 use App\Models\PersonnelEducation;
 use App\Models\PersonnelJobExperience;
@@ -346,6 +347,59 @@ class PersonnelSelfEditController extends Controller
             'status' => 'success',
             'message' => 'Updated.',
             'data' => ['training_seminars' => $all],
+        ]);
+    }
+
+    /**
+     * Replace the awards/achievements for the logged-in personnel.
+     */
+    public function updateAchievements(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'achievements' => 'present|array',
+            'achievements.*.type' => 'required|in:Award,Achievement,Scholarship',
+            'achievements.*.title' => 'required|string|max:2000',
+            'achievements.*.awarding_body' => 'nullable|string|max:2000',
+            'achievements.*.award_date' => 'nullable|date',
+            'achievements.*.excerpt' => 'nullable|string|max:5000',
+        ], [
+            'achievements.*.title.required' => 'Provide a title.',
+        ]);
+
+        $imsUser = $this->readImsUser($request);
+        $personnelId = $imsUser['personnel_id'] ?? null;
+
+        if (!$personnelId) {
+            return response()->json(['status' => 'error', 'message' => 'Could not identify personnel.'], 403);
+        }
+
+        $profile = PersonnelProfile::firstOrCreate(['personnel_id' => $personnelId]);
+        $profile->achievements()->delete();
+
+        $created = [];
+        foreach ($validated['achievements'] as $item) {
+            $created[] = PersonnelAchievement::create([
+                'personnel_id' => $personnelId,
+                'type' => $item['type'],
+                'title' => trim($item['title']),
+                'awarding_body' => isset($item['awarding_body']) && $item['awarding_body'] !== '' ? trim($item['awarding_body']) : null,
+                'award_date' => $item['award_date'] ?? null,
+                'excerpt' => isset($item['excerpt']) && $item['excerpt'] !== '' ? trim($item['excerpt']) : null,
+            ]);
+        }
+
+        $mapped = collect($created)->map(fn ($item) => [
+            'type' => $item->type,
+            'title' => $item->title,
+            'awarding_body' => $item->awarding_body,
+            'award_date' => optional($item->award_date)->toDateString(),
+            'excerpt' => $item->excerpt,
+        ])->values()->all();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Achievements updated.',
+            'data' => ['achievements' => $mapped],
         ]);
     }
 
