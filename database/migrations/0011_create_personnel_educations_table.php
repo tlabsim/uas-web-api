@@ -16,8 +16,9 @@ return new class extends Migration {
             ]);
             $table->string('institution', 255);
             $table->string('awarding_body', 255)->nullable();
-            $table->date('start_month_year');
-            $table->date('end_month_year');
+            $table->text('remarks')->nullable();
+            $table->date('start_month_year')->nullable();
+            $table->date('end_month_year')->nullable();
             $table->string('passing_year', 4);
             $table->timestamps();
 

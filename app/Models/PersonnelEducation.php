@@ -16,6 +16,7 @@ class PersonnelEducation extends Model
         'degree_level',
         'institution',
         'awarding_body',
+        'remarks',
         'start_month_year',
         'end_month_year',
         'passing_year',

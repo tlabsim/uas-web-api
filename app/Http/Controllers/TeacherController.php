@@ -237,10 +237,13 @@ class TeacherController extends Controller
                     'degree_level' => $item->degree_level,
                     'institution' => $item->institution,
                     'awarding_body' => $item->awarding_body,
+                    'remarks' => $item->remarks,
                     'start_month' => $item->start_month,
                     'start_year' => $item->start_year,
                     'end_month' => $item->end_month,
                     'end_year' => $item->end_year,
+                    'start_month_year' => optional($item->start_month_year)->toDateString(),
+                    'end_month_year' => optional($item->end_month_year)->toDateString(),
                     'passing_year' => $item->passing_year,
                 ])->values()->all(),
                 'job_experiences' => $profile->jobExperiences->map(fn ($item) => [

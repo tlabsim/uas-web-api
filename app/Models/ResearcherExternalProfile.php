@@ -11,7 +11,7 @@ class ResearcherExternalProfile extends Model
     public $timestamps = true;
 
     protected $fillable = [
-        'reseacher_id', // note: typo in original schema
+        'researcher_id',
         'profile_type',
         'profile_id',
         'profile_link',
@@ -19,6 +19,6 @@ class ResearcherExternalProfile extends Model
 
     public function researcher()
     {
-        return $this->belongsTo(Researcher::class, 'reseacher_id');
+        return $this->belongsTo(Researcher::class, 'researcher_id');
     }
 }

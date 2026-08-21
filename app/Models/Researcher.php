@@ -17,8 +17,12 @@ class Researcher extends Model
         'research_interests',
     ];
 
+    protected $casts = [
+        'research_interests' => 'array',
+    ];
+
     public function externalProfiles()
     {
-        return $this->hasMany(ResearcherExternalProfile::class, 'reseacher_id');
+        return $this->hasMany(ResearcherExternalProfile::class, 'researcher_id');
     }
 }
