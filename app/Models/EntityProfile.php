@@ -90,4 +90,9 @@ class EntityProfile extends Model
     {
         return $this->hasMany(Gallery::class, 'owner_entity_id', 'entity_id');
     }
+
+    public function programProfiles()
+    {
+        return $this->hasMany(EntityProgramProfile::class, 'entity_id', 'entity_id');
+    }
 }

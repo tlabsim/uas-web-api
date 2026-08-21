@@ -48,6 +48,8 @@ class PostPreviewController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Post not found.'], 404);
         }
 
+        $post->setAttribute('metadata_values', $post->metadata->pluck('meta_value', 'meta_key')->all());
+
         return response()->json(['status' => 'success', 'data' => $post]);
     }
 }

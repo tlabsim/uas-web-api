@@ -13,6 +13,7 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\PublicationController;
 use App\Http\Controllers\ResearchController;
+use App\Http\Controllers\ProgramProfileController;
 use App\Http\Controllers\SnippetController;
 use App\Http\Controllers\GalleryController;
 
@@ -25,6 +26,7 @@ use App\Http\Controllers\Editor\SnippetController as EditorSnippetController;
 use App\Http\Controllers\Editor\MediaFolderController as EditorMediaFolderController;
 use App\Http\Controllers\Editor\MediaItemController as EditorMediaItemController;
 use App\Http\Controllers\Editor\GalleryController as EditorGalleryController;
+use App\Http\Controllers\Editor\ProgramProfileController as EditorProgramProfileController;
 use App\Http\Controllers\Api\PersonnelSelfEditController;
 use App\Http\Controllers\Entity\ProfileController as EntityProfileController;
 use App\Http\Controllers\Entity\SettingController as EntitySettingController;
@@ -43,6 +45,8 @@ Route::middleware([])->group(function () {
     Route::get('entity/menus', [EntityController::class, 'menus']);    // Input: ?entity_id
     Route::get('entity/settings', [EntityController::class, 'settings']); // Input: ?entity_id
     Route::get('entity/navigation', [EntityNavigationController::class, 'show']); // Input: ?entity_id
+    Route::get('entity/program-profiles', [ProgramProfileController::class, 'index']);
+    Route::get('entity/program-profile', [ProgramProfileController::class, 'show']);
 
     // 🔹 Static Pages
     Route::get('pages', [PageController::class, 'index']);             // Input: ?entity_id, optional: category_id, subcategory_id
@@ -175,4 +179,11 @@ Route::middleware(['ims.logged_in_and_role_selected:web_curator'])->group(functi
     Route::put('editor/entity/settings/{id}', [EntitySettingController::class, 'updateSingle']);
     Route::delete('editor/entity/settings/{id}', [EntitySettingController::class, 'destroy']);
     Route::put('editor/entity/settings', [EntitySettingController::class, 'update']);
+
+    // Entity program website profiles. Program facts remain canonical in IMS.
+    Route::get('editor/program-profiles', [EditorProgramProfileController::class, 'index']);
+    Route::get('editor/program-profiles/{programId}', [EditorProgramProfileController::class, 'show']);
+    Route::put('editor/program-profiles/{programId}', [EditorProgramProfileController::class, 'upsert']);
+    Route::delete('editor/program-profiles/{programId}', [EditorProgramProfileController::class, 'destroy']);
+    Route::put('editor/program-profiles-order', [EditorProgramProfileController::class, 'reorder']);
 });

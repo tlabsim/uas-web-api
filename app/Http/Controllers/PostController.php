@@ -38,6 +38,10 @@ class PostController extends Controller
             $query->with(['attachments' => fn ($attachments) => $attachments->ordered()]);
         }
 
+        if ($includes->contains('metadata')) {
+            $query->with('metadata');
+        }
+
         if ($request->filled('category')) {
             $query->where('category', $request->category);
         }
@@ -55,9 +59,14 @@ class PostController extends Controller
 
         $limit = $request->input('limit', 10);
 
+        $posts = $query->paginate($limit);
+        if ($includes->contains('metadata')) {
+            $posts->getCollection()->each(fn (Post $post) => $this->appendMetadataValues($post));
+        }
+
         return response()->json([
             'status' => 'success',
-            'data' => $query->paginate($limit)
+            'data' => $posts,
         ]);
     }
 
@@ -80,6 +89,13 @@ class PostController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Post not found'], 404);
         }
 
+        $this->appendMetadataValues($post);
+
         return response()->json(['status' => 'success', 'data' => $post]);
+    }
+
+    private function appendMetadataValues(Post $post): void
+    {
+        $post->setAttribute('metadata_values', $post->metadata->pluck('meta_value', 'meta_key')->all());
     }
 }

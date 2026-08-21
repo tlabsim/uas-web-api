@@ -283,10 +283,19 @@ return new class extends Migration {
                         ],
                         [
                             'key' => 'lead_researcher',
-                            'label' => 'Lead Researcher',
+                            'label' => 'Researchers / Lead Researchers',
                             'type' => 'text',
                             'required' => false,
                             'searchable' => true,
+                            'help_text' => 'Enter one or more researcher names.',
+                        ],
+                        [
+                            'key' => 'research_keywords',
+                            'label' => 'Keywords',
+                            'type' => 'text',
+                            'required' => false,
+                            'searchable' => true,
+                            'help_text' => 'Separate multiple keywords with commas.',
                         ],
                         [
                             'key' => 'external_link',
