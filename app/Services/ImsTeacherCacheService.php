@@ -200,6 +200,7 @@ class ImsTeacherCacheService
             $response = Http::baseUrl($baseUrl)
                 ->acceptJson()
                 ->timeout(15)
+                ->withHeaders(['X-API-KEY' => (string) config('ims.api_key')])
                 ->get('personnels', [
                     'type' => 'Teacher',
                     'status' => 'Active',

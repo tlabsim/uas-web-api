@@ -7,6 +7,7 @@ use App\Models\PersonnelProfile;
 use App\Models\Publication;
 use App\Models\Research;
 use App\Models\SeminarWorkshopTraining;
+use App\Services\ImsContactService;
 use App\Services\ImsTeacherCacheService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,8 @@ use Illuminate\Support\Str;
 class TeacherController extends Controller
 {
     public function __construct(
-        protected ImsTeacherCacheService $teacherCacheService
+        protected ImsTeacherCacheService $teacherCacheService,
+        protected ImsContactService $contactService
     ) {
     }
 
@@ -165,22 +167,26 @@ class TeacherController extends Controller
         $cache = $profile->cache;
         $primaryAffiliation = $affiliations->firstWhere('is_primary', true);
 
-        $publications = Publication::query()
-            ->whereHas('authors', function ($query) use ($personnelId) {
-                $query->where('internal_author_id', $personnelId)
-                    ->where('show_in_profile', true);
-            })
-            ->with(['authors', 'meta'])
-            ->orderByDesc('publication_date')
-            ->get();
+        $researcherId = PersonnelProfile::find($personnelId)?->researcher_id;
 
-        $researches = Research::query()
-            ->whereHas('people', function ($query) use ($personnelId) {
-                $query->where('internal_researcher_id', $personnelId);
-            })
-            ->with(['people', 'publications'])
-            ->orderByDesc('updated_at')
-            ->get();
+        $publications = $researcherId
+            ? Publication::query()
+                ->whereHas('authors', function ($query) use ($researcherId) {
+                    $query->where('internal_author_id', $researcherId)
+                        ->where('show_in_profile', true);
+                })
+                ->with(['authors', 'meta'])
+                ->orderByDesc('publication_date')
+                ->get()
+            : collect();
+
+        $researches = $researcherId
+            ? Research::query()
+                ->whereHas('people', fn ($query) => $query->where('internal_researcher_id', $researcherId))
+                ->with(['people', 'publications'])
+                ->orderByDesc('updated_at')
+                ->get()
+            : collect();
 
         $trainingSeminars = SeminarWorkshopTraining::query()
             ->where('personnel_id', $personnelId)
@@ -197,6 +203,7 @@ class TeacherController extends Controller
             'status' => 'success',
             'data' => [
                 'personnel_id' => $personnelId,
+                'researcher_id' => $researcherId,
                 'display_name' => $profile->display_name ?: $fullName,
                 'full_name_with_title' => $fullName,
                 'first_name' => data_get($cache, 'first_name'),
@@ -228,10 +235,10 @@ class TeacherController extends Controller
                     'start_date' => optional($item->start_date)->toDateString(),
                     'end_date' => optional($item->end_date)->toDateString(),
                 ])->values()->all(),
-                'contact' => [
+                'contact' => array_merge([
                     'institutional_email' => data_get($cache, 'institutional_mail'),
                     'primary_phone' => data_get($cache, 'primary_phone'),
-                ],
+                ], $this->resolveImsContactBlock($personnelId)),
                 'education' => $profile->educations->map(fn ($item) => [
                     'degree_title' => $item->degree_title,
                     'degree_level' => $item->degree_level,
@@ -272,11 +279,16 @@ class TeacherController extends Controller
                     'type' => $item->type,
                     'link_url' => $item->link_url,
                     'keywords' => $item->keywords,
+                    'meta' => $item->meta
+                        ->filter(fn ($m) => $m->meta_value !== null && $m->meta_value !== '')
+                        ->mapWithKeys(fn ($m) => [$m->meta_key => $m->meta_value])
+                        ->all(),
                     'authors' => $item->authors
                         ->sortBy('sl')
                         ->map(fn ($author) => [
                             'name' => $author->author_name,
                             'internal_author_id' => $author->internal_author_id,
+                            'external_profile_link' => $author->external_author_profile_link,
                             'is_primary_editor' => (bool) $author->is_primary_editor,
                             'is_editor' => (bool) $author->is_editor,
                         ])->values()->all(),
@@ -294,7 +306,9 @@ class TeacherController extends Controller
                         ->map(fn ($person) => [
                             'name' => $person->researcher_name,
                             'internal_researcher_id' => $person->internal_researcher_id,
+                            'external_profile_link' => $person->external_researcher_profile_link,
                             'role' => $person->role,
+                            'is_owner' => (int) $person->internal_researcher_id === (int) $researcherId,
                         ])->values()->all(),
                 ])->values()->all(),
                 'training_seminars' => $trainingSeminars->map(fn ($item) => [
@@ -309,8 +323,33 @@ class TeacherController extends Controller
                 ])->values()->all(),
                 'web_settings' => $this->groupKeyValueCollection($profile->webSettings, 'key_group', 'setting_key'),
                 'additional_data' => $this->groupKeyValueCollection($profile->additionalData, 'data_group', 'data_key'),
+                'courses' => $this->decodeTeacherCourses($profile->additionalData),
+                'supervisions' => $this->decodeTeacherSupervisions($profile->additionalData),
+                'dashboard_profile_url' => (string) config('ims.dashboard_profile_url'),
             ],
         ]);
+    }
+
+    /**
+     * Fetch additional contacts + offices from IMS (source of truth) for the
+     * public profile. Fails soft to empty arrays so the page still renders.
+     */
+    protected function resolveImsContactBlock(?string $personnelId): array
+    {
+        if (!$personnelId) {
+            return ['additional_contacts' => [], 'offices' => []];
+        }
+
+        try {
+            return $this->contactService->contactBlock($personnelId);
+        } catch (\Throwable $exception) {
+            \Illuminate\Support\Facades\Log::warning('Failed to load IMS contact block.', [
+                'personnel_id' => $personnelId,
+                'error' => $exception->getMessage(),
+            ]);
+
+            return ['additional_contacts' => [], 'offices' => []];
+        }
     }
 
     protected function mapTeacherDirectoryRow(object $row, string $fullName): array
@@ -390,6 +429,59 @@ class TeacherController extends Controller
                     ->mapWithKeys(fn ($item) => [$item->{$itemKeyField} => $item->value])
                     ->all();
             })
+            ->all();
+    }
+
+    protected function decodeTeacherCourses(Collection $items): array
+    {
+        return $items
+            ->where('data_group', 'teacher_courses')
+            ->map(function ($row) {
+                $data = json_decode($row->value, true);
+                if (!is_array($data)) {
+                    $data = [];
+                }
+                return [
+                    'id' => $row->id,
+                    'course_code' => (string) ($data['course_code'] ?? ''),
+                    'title' => (string) ($data['title'] ?? ''),
+                    'level' => (string) ($data['level'] ?? ''),
+                    'description' => (string) ($data['description'] ?? ''),
+                    'link' => (string) ($data['link'] ?? ''),
+                ];
+            })
+            ->sortBy(fn ($c) => strtoupper($c['course_code']))
+            ->values()
+            ->all();
+    }
+
+    protected function decodeTeacherSupervisions(Collection $items): array
+    {
+        return $items
+            ->where('data_group', 'teacher_supervisions')
+            ->map(function ($row) {
+                $data = json_decode($row->value, true);
+                if (!is_array($data)) {
+                    $data = [];
+                }
+                return [
+                    'id' => $row->id,
+                    'student_name' => (string) ($data['student_name'] ?? ''),
+                    'level' => (string) ($data['level'] ?? ''),
+                    'period' => (string) ($data['period'] ?? ''),
+                    'topic' => (string) ($data['topic'] ?? ''),
+                    'description' => (string) ($data['description'] ?? ''),
+                    'link' => (string) ($data['link'] ?? ''),
+                ];
+            })
+            ->sortByDesc(function ($s) {
+                $period = (string) ($s['period'] ?? '');
+                if (preg_match('/\b(19|20)\d{2}\b/', $period, $m)) {
+                    return (int) $m[0];
+                }
+                return 0;
+            })
+            ->values()
             ->all();
     }
 }

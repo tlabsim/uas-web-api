@@ -76,6 +76,7 @@ class ImsPersonnelCacheService
         $response = Http::baseUrl(rtrim((string) config('ims.api_base_url'), '/'))
             ->acceptJson()
             ->timeout(10)
+            ->withHeaders(['X-API-KEY' => (string) config('ims.api_key')])
             ->get('personnels', [
                 'id' => $personnelId,
                 'include' => 'designation',

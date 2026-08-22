@@ -94,6 +94,25 @@ Route::middleware(['ims.logged_in'])->group(function () {
     Route::post('self/personnel/research-interests', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateResearchInterests']);
     Route::post('self/personnel/photo', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updatePhoto']);
     Route::delete('self/personnel/photo', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deletePhoto']);
+    Route::post('self/personnel/research', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'storeResearch']);
+    Route::post('self/personnel/research/image', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'uploadResearchImage']);
+    Route::get('self/researchers/search', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'searchResearchers']);
+    Route::get('self/personnel/research/{research}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'showResearch']);
+    Route::get('self/personnel/publications', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'listMyPublications']);
+    Route::post('self/personnel/publication', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'storePublication']);
+    Route::get('self/personnel/publication/{publication}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'showPublication']);
+    Route::put('self/personnel/publication/{publication}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updatePublication']);
+    Route::delete('self/personnel/publication/{publication}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deletePublication']);
+    Route::put('self/personnel/research/{research}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateResearch']);
+    Route::delete('self/personnel/research/{research}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deleteResearch']);
+    Route::get('self/personnel/courses', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'listCourses']);
+    Route::post('self/personnel/course', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'storeCourse']);
+    Route::put('self/personnel/course/{id}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateCourse']);
+    Route::delete('self/personnel/course/{id}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deleteCourse']);
+    Route::get('self/personnel/supervisions', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'listSupervisions']);
+    Route::post('self/personnel/supervision', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'storeSupervision']);
+    Route::put('self/personnel/supervision/{id}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'updateSupervision']);
+    Route::delete('self/personnel/supervision/{id}', [\App\Http\Controllers\Api\PersonnelSelfEditController::class, 'deleteSupervision']);
 });
 
 // Only for web curators
